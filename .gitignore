@@ -1,0 +1,15 @@
+.env
+config.json
+userbot_session.session
+reload_config.txt
+error.log
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.DS_Store
+user_session.session
+admin_session.session
