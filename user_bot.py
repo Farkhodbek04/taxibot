@@ -619,7 +619,7 @@ async def fetch_my_groups_with_id(client):
         if isinstance(entity, Channel) and entity.megagroup:
             group_id = entity.id
             name = entity.title
-            id_str = f"-100{group_id}"
+            id_str = f"-100{str(group_id)}"
             if entity.username:
                 link = f"https://t.me/{entity.username}"
                 my_groups[id_str] = f"[{name}]({link})"
@@ -628,8 +628,8 @@ async def fetch_my_groups_with_id(client):
         elif isinstance(entity, Chat):  # classic group
             group_id = entity.id
             name = entity.title
-            id_str = str(group_id)
-            my_groups[id_str] = f"[{name}](Classic group - no link)"
+            id_str = f"-100{str(group_id)}"
+            my_groups[id_str] = f"[{name}](Classic guruh - havola yo'q)"
 
     return my_groups
 
