@@ -46,7 +46,7 @@
 #     asyncio.run(run_bots())
 
 import asyncio
-from admin_bot import main as admin_bot_main
+from bot_admin import main as admin_bot_main
 from user_bot import user_bot_main
 
 async def run_bots():

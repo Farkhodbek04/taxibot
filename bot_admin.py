@@ -10,9 +10,10 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.exceptions import TelegramBadRequest
 from dotenv import load_dotenv
-from telethon import TelegramClient
-from telethon.tl.types import Channel, Chat
-from telethon.errors import SessionPasswordNeededError
+# from telethon import TelegramClient
+# from telethon.tl.types import Channel, Chat
+# from telethon.errors import SessionPasswordNeededError
+
 
 # Load environment variables
 load_dotenv()
@@ -24,22 +25,21 @@ SESSION_NAME = "admin_session"
 SUPERADMIN = int(os.getenv("SUPERADMIN", "0"))
 CONFIG_FILE = "groups_config.json"
 
-# Initialize Telethon client
-client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
-
 # Initialize bot and dispatcher with FSM storage
 bot = Bot(token=BOT_TOKEN)
 storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 
-# Telegram message character limit
-MAX_MESSAGE_LENGTH = 4096
-MAX_GROUPS_DISPLAY = 20  # Limit to avoid entity parsing errors
-
 # Caches
-group_info_cache = {}  # Cache for group info
 available_groups_cache = None  # Cache for available groups
 cache_refresh_task = None
+
+# Get available groups from cache
+def get_available_groups():
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return None
 
 # Define states for handling input
 class ConfigStates(StatesGroup):
@@ -47,7 +47,7 @@ class ConfigStates(StatesGroup):
     ADDING_DESTINATION = State()
     ADDING_KEYWORD = State()
     ADDING_ADMIN = State()
-
+    
 # Load and save config
 def load_config(file_name:str):
     try:
@@ -68,102 +68,48 @@ def load_config(file_name:str):
 
 def save_config(config):
     try:
-        print(f"Saving config: {config}")
-        with open('config.json', 'w') as file:
-            json.dump(config, file, indent=4)
-        with open('reload_config.txt', 'w') as file:
+        print("Saving config to 'config.json'...")
+        with open('config.json', 'w', encoding='utf-8') as file:
+            json.dump(config, file, indent=4, ensure_ascii=False)
+
+        with open('reload_config.txt', 'w', encoding='utf-8') as file:
             file.write("reload")
+
+        print("✅ Config saved successfully.")
     except Exception as e:
-        print(f"Error saving config: {str(e)}")
+        print(f"❌ Error saving config: {str(e)}")
         raise
 
-# Refresh available groups cache in background
-from user_bot import get_groups_dict
-async def refresh_available_groups_cache():
-    groups = await get_groups_dict()
-    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-        json.dump(groups, f, ensure_ascii=False, indent=2)
-    return groups
+def split_message(text: str, max_length: int = 4096) -> list:
+    """Split a message into parts that fit within Telegram's max message length."""
+    if len(text) <= max_length:
+        return [text]
     
-# Get group info (id, title, username/link) for a list of group IDs with monospace IDs
-async def get_group_info(group_ids):
-    group_info = []
-    tasks = []
-
-    async def fetch_group_info(group_id):
-        if group_id in group_info_cache:
-            return group_info_cache[group_id]
-        try:
-            if not client.is_connected():
-                await client.connect()
-            entity_id = int(str(group_id).replace("-100", "-"))
-            entity = await client.get_entity(entity_id)
-            if isinstance(entity, Channel):
-                if entity.username:
-                    link = f"@{entity.username}"
-                else:
-                    stripped_id = str(abs(entity_id))
-                    link = f"[Link](https://t.me/c/{stripped_id}/1)"
-                result = f"`{group_id}` - {entity.title} {link}".strip()
-            elif isinstance(entity, Chat):
-                result = f"`{group_id}` - {entity.title} (Oddiy guruh — havola yo'q)"
-            else:
-                result = f"`{group_id}` - Noma'lum guruh turi"
-            group_info_cache[group_id] = result
-            return result
-        except Exception as e:
-            result = f"`{group_id}` - Noma'lum guruh (xato: {str(e)})"
-            group_info_cache[group_id] = result
-            return result
-
-    for group_id in group_ids:
-        tasks.append(fetch_group_info(group_id))
-    
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-    for result in results:
-        if isinstance(result, str):
-            group_info.append(result)
-        else:
-            group_info.append(f"`{group_id}` - Noma'lum guruh (xato: {str(result)})")
-    
-    print(f"get_group_info result for {group_ids}: {group_info}")
-    return group_info
-
-# Get available groups from cache
-def get_available_groups():
-    if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return None
-
-# Split a long message into parts
-def split_message(text, max_length=MAX_MESSAGE_LENGTH):
-    lines = text.split('\n')
     messages = []
-    current_message = []
-    current_length = 0
+    current_message = ""
+    lines = text.split("\n")
+    
     for line in lines:
-        if current_length + len(line) + 1 > max_length:
-            messages.append('\n'.join(current_message))
-            current_message = [line]
-            current_length = len(line) + 1
+        if len(current_message) + len(line) + 1 > max_length:
+            messages.append(current_message.strip())
+            current_message = line + "\n"
         else:
-            current_message.append(line)
-            current_length += len(line) + 1
-    if current_message:
-        messages.append('\n'.join(current_message))
+            current_message += line + "\n"
+    
+    if current_message.strip():
+        messages.append(current_message.strip())
+    
     return messages
-
 # Initial config load
 config = load_config("config.json")
-ADMIN_IDS = config.get("admins", ADMIN_IDS)
+ADMIN_IDS = config.get("admins", ADMIN_IDS) 
 
 # Inline keyboard markup for main menu
 main_menu = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton(text="Ko'rish 📊", callback_data="view")],
     [InlineKeyboardButton(text="Qo'shish ➕", callback_data="add")],
-    [InlineKeyboardButton(text="O'chirish ❌", callback_data="delete")]
-    [InlineKeyboardButton(text="Guruhlarim 📂", callback_data="groups")]
+    [InlineKeyboardButton(text="O'chirish ❌", callback_data="delete")],
+    [InlineKeyboardButton(text="Guruhlarim 👥", callback_data="groups")]
 ])
 
 # Inline keyboard for selecting category to add
@@ -223,7 +169,7 @@ async def add_admin(message: Message, state: FSMContext):
     except ValueError:
         await message.reply("⚠️ Iltimos, to'g'ri ID kiriting (masalan, 123456789)! 👮", reply_markup=main_menu, parse_mode="Markdown")
     await state.clear()
-
+    
 # Handler for "Ko'rish" (View)
 @dp.callback_query(lambda c: c.data == "view")
 async def process_view(callback_query: CallbackQuery, state: FSMContext):
@@ -583,8 +529,60 @@ async def process_back(callback_query: CallbackQuery, state: FSMContext):
     await state.clear()
     await callback_query.answer()
     await bot.send_message(callback_query.from_user.id, "Asosiy menyuga qaytdingiz! 🎉", reply_markup=main_menu)
-    
+
 from user_bot import get_groups_dict
+
+# Handler for Guruhlarim
+# @dp.callback_query(lambda c: c.data == "groups")
+# async def show_my_groups(callback_query: CallbackQuery, state: FSMContext):
+#     user_id = callback_query.from_user.id
+#     if user_id not in ADMIN_IDS:
+#         await bot.send_message(user_id, "Sizda bu botni ishlatish uchun ruxsat yo'q! ⚠️")
+#         return
+
+#     await callback_query.answer("⏳ Guruhlar yangilanmoqda...")
+
+#     try:
+#         groups = await get_groups_dict()
+
+#         # Save to groups_config.json
+#         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+#             json.dump(groups, f, ensure_ascii=False, indent=2)
+
+#         if not groups:
+#             await bot.send_message(user_id, "📂 Hech qanday guruh topilmadi!", reply_markup=main_menu)
+#             return
+
+#         text_lines = ["📂 **Sizdagi guruhlar ro'yxati:**\n"]
+#         for group_id, display in groups.items():
+#             text_lines.append(f"• `{group_id}` - {display}")
+
+#         text = "\n".join(text_lines)
+#         await bot.send_message(user_id, text, parse_mode="Markdown", disable_web_page_preview=True, reply_markup=main_menu)
+
+#     except Exception as e:
+#         print("❌ Guruhlarni olishda xatolik:", e)
+#         await bot.send_message(user_id, "⚠️ Guruhlarni olishda xatolik yuz berdi!", reply_markup=main_menu)
+   
+ # Split a long message into parts
+MAX_MESSAGE_LENGTH = 4096  # Telegram's max message length
+
+def split_message(text, max_length=MAX_MESSAGE_LENGTH):
+    lines = text.split('\n')
+    messages = []
+    current_message = []
+    current_length = 0
+    for line in lines:
+        if current_length + len(line) + 1 > max_length:
+            messages.append('\n'.join(current_message))
+            current_message = [line]
+            current_length = len(line) + 1
+        else:
+            current_message.append(line)
+            current_length += len(line) + 1
+    if current_message:
+        messages.append('\n'.join(current_message))
+    return messages
 
 # Handler for Guruhlarim
 @dp.callback_query(lambda c: c.data == "groups")
@@ -604,7 +602,7 @@ async def show_my_groups(callback_query: CallbackQuery, state: FSMContext):
             json.dump(groups, f, ensure_ascii=False, indent=2)
 
         if not groups:
-            await bot.send_message(user_id, "📂 Hech qanday guruh topilmadi!", reply_markup=main_menu)
+            await bot.send_message(user_id, "📂 Hech qanday guruh topilmadi!", reply_markup=main_menu, parse_mode="Markdown")
             return
 
         text_lines = ["📂 **Sizdagi guruhlar ro'yxati:**\n"]
@@ -612,29 +610,41 @@ async def show_my_groups(callback_query: CallbackQuery, state: FSMContext):
             text_lines.append(f"• `{group_id}` - {display}")
 
         text = "\n".join(text_lines)
-        await bot.send_message(user_id, text, parse_mode="Markdown", disable_web_page_preview=True, reply_markup=main_menu)
+        messages = split_message(text, max_length=MAX_MESSAGE_LENGTH)
+
+        # Send each message part
+        for i, msg in enumerate(messages):
+            # Only include reply_markup on the last message
+            reply_markup = main_menu if i == len(messages) - 1 else None
+            await bot.send_message(
+                user_id,
+                msg,
+                parse_mode="Markdown",
+                disable_web_page_preview=True,
+                reply_markup=reply_markup
+            )
 
     except Exception as e:
         print("❌ Guruhlarni olishda xatolik:", e)
-        await bot.send_message(user_id, "⚠️ Guruhlarni olishda xatolik yuz berdi!", reply_markup=main_menu)
-   
-    
+        await bot.send_message(user_id, "⚠️ Guruhlarni olishda xatolik yuz berdi!", reply_markup=main_menu, parse_mode="Markdown")
 
-# Run the bot with error logging to super admin
+   
 async def main():
-    global cache_refresh_task
     try:
-        await client.start()
-        cache_refresh_task = asyncio.create_task(refresh_available_groups_cache())
-        await dp.start_polling(bot)
-    except SessionPasswordNeededError:
-        print("2FA required. Please handle 2FA authentication manually.")
-        await client.disconnect()
+        # Start the bot polling
+        print("Starting bot...")
+        await dp.start_polling(bot, skip_updates=True)
     except Exception as e:
-        with open('error.log', 'a') as log_file:
+        # Log error to file
+        with open('error.log', 'a', encoding='utf-8') as log_file:
             log_file.write(f"Error: {str(e)}\n")
+        # Notify superadmin
         if SUPERADMIN:
-            await bot.send_message(SUPERADMIN, f"🚨Botda xatolik yuz berdi: {str(e)} ⚠️")
+            try:
+                await bot.send_message(SUPERADMIN, f"🚨 Botda xatolik yuz berdi: {str(e)} ⚠️")
+            except Exception as notify_error:
+                print(f"Failed to notify superadmin: {notify_error}")
+        raise  # Re-raise to stop the bot on critical errors
 
 if __name__ == "__main__":
     import asyncio

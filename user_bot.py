@@ -555,6 +555,9 @@
 import json
 import os
 from telethon import TelegramClient, events
+from telethon.sessions import StringSession
+from telethon.tl.types import Channel, Chat, User
+from telethon.errors import SessionPasswordNeededError, ApiIdInvalidError, AuthKeyUnregisteredError
 from rapidfuzz import process, fuzz
 from dotenv import load_dotenv
 from datetime import datetime
@@ -584,6 +587,14 @@ source_ids = []
 destination_ids = []
 ad_keywords = set()
 keywords = []
+my_groups = {}
+
+async def regenerate_session():
+    async with TelegramClient(StringSession(), API_ID, API_HASH) as client:
+        await client.start()
+        string = client.session.save()
+        print(f"\n🔐 New string session:\n{string}")
+        return string
 
 def read_config():
     try:
@@ -596,15 +607,48 @@ def read_config():
         if bot and SUPERADMIN:
             asyncio.create_task(bot.send_message(SUPERADMIN, f"🚨 UserBot: {error_msg} ⚠️"))
         raise
+    
+from telethon.tl.types import Channel, Chat
+
+async def fetch_my_groups_with_id(client):
+    my_groups = {}
+
+    async for dialog in client.iter_dialogs():
+        entity = dialog.entity
+        # Include megagroups and normal groups
+        if isinstance(entity, Channel) and entity.megagroup:
+            group_id = entity.id
+            name = entity.title
+            id_str = f"-100{group_id}"
+            if entity.username:
+                link = f"https://t.me/{entity.username}"
+                my_groups[id_str] = f"[{name}]({link})"
+            else:
+                my_groups[id_str] = f"[{name}](Havola yo'q)"
+        elif isinstance(entity, Chat):  # classic group
+            group_id = entity.id
+            name = entity.title
+            id_str = str(group_id)
+            my_groups[id_str] = f"[{name}](Classic group - no link)"
+
+    return my_groups
+
+
+async def get_groups_dict():
+    await client.start()
+    my_groups = await fetch_my_groups_with_id(client)
+    return my_groups   
+
+def get_static_groups():
+    return my_groups
 
 # Load initial configuration
 def load_config():
     global config, source_ids, destination_ids, ad_keywords, keywords
     try:
         config = read_config()
-        source_ids = [int(f"-100{abs(id)}" if id >= 0 else str(id)) for id in config.get('sources', [])]
-        destination_ids = [int(f"-100{abs(id)}" if id >= 0 else str(id)) for id in config.get('destinations', [])]
-        ad_keywords = set(config.get('ad_keywords', []))
+        source_ids = [int(f"-100{abs(id)}" if int(id) >= 0 else str(id)) for id in config.get('sources', {}).keys()]
+        destination_ids = [int(f"-100{abs(id)}" if int(id) >= 0 else str(id)) for id in config.get('destinations', {}).keys()]
         keywords = [key for key in config['keywords']]
     except Exception as e:
         error_msg = f"Error loading config in user_bot: {str(e)}"
@@ -653,7 +697,7 @@ async def handler(event):
     try:
         message_text = event.message.message or ''
         chat_id = int(f"-100{abs(event.chat_id)}" if event.chat_id >= 0 else str(event.chat_id))
-        if chat_id in source_ids and len(message_text) < 70:
+        if chat_id in source_ids and len(message_text) <= 70:
             if await is_client_request(message_text):
                 sender = await event.get_sender()
                 username = sender.username if sender.username else f"tg://user?id={sender.id}"
@@ -672,13 +716,22 @@ async def handler(event):
                     f"🕒 Vaqt: {formatted_time}\n"
                     f"💬 Xabar: {message_text}"
                 )
+                print(destination_ids)
+                
                 for dest_id in destination_ids:
-                    # Strip -100 prefix for sending
-                    send_id = int(str(dest_id).replace("-100", "-"))
-                    print(f"Sending to {send_id}")
-                    await client.send_message(send_id, formatted_message, parse_mode='markdown', link_preview=False)
+                    try:
+                        # Strip -100 prefix for sending
+                        send_id = int(str(dest_id).replace("-100", "-"))
+                        entity = await client.get_entity(dest_id)
+                        print(dest_id)
+                        print(f"Sending to {dest_id}")
+                        await client.send_message(entity, formatted_message, parse_mode='markdown', link_preview=False)
+                    except Exception as e:
+                        print(f"Eroor: {e}")
+                    
     except Exception as e:
         error_msg = f"Error in message handler: {str(e)}"
+        print(error_msg)
         with open('error.log', 'a') as log_file:
             log_file.write(f"{error_msg}\n")
         if bot and SUPERADMIN:
@@ -706,6 +759,7 @@ async def user_bot_main():
         await client.start()
         print("User bot ishga tushdi va xabarlarni kuzatmoqda...")
         asyncio.create_task(config_poller())
+        asyncio.create_task(fetch_my_groups_with_id(client))
         await client.run_until_disconnected()
     except Exception as e:
         error_msg = f"User bot failed: {str(e)}"
