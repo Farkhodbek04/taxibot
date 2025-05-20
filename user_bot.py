@@ -598,11 +598,11 @@ async def regenerate_session():
 
 def read_config():
     try:
-        with open('config.json', 'r') as f:
+        with open('config.json', 'r', encoding='utf-8') as f:
             return json.load(f)
     except Exception as e:
         error_msg = f"Error reading config.json in user_bot: {str(e)}"
-        with open('error.log', 'a') as log_file:
+        with open('error.log', 'a', encoding='utf-8') as log_file:
             log_file.write(f"{error_msg}\n")
         if bot and SUPERADMIN:
             asyncio.create_task(bot.send_message(SUPERADMIN, f"🚨 UserBot: {error_msg} ⚠️"))

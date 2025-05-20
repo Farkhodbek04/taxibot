@@ -34,12 +34,23 @@ dp = Dispatcher(storage=storage)
 available_groups_cache = None  # Cache for available groups
 cache_refresh_task = None
 
+import re
+
+def escape_md(text: str) -> str:
+    """Escape Markdown special characters to prevent formatting issues."""
+    special_chars = r'([*_[\]()~`>#+-=|{}.!])'
+    return re.sub(special_chars, r'\\\1', str(text))
+
 # Get available groups from cache
 def get_available_groups():
-    if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return None
+    try:
+        if os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        return {}
+    except Exception as e:
+        print(f"❌ Error loading groups config: {str(e)}")
+        return {}
 
 # Define states for handling input
 class ConfigStates(StatesGroup):
@@ -49,23 +60,33 @@ class ConfigStates(StatesGroup):
     ADDING_ADMIN = State()
     
 # Load and save config
-def load_config(file_name:str):
+def load_config(file_name: str):
     try:
-        with open(file_name, 'r') as file:
+        with open(file_name, 'r', encoding="utf-8") as file:
             config = json.load(file)
+            # Ensure consistent structure
+            if not isinstance(config.get("sources"), dict):
+                config["sources"] = {}
+            if not isinstance(config.get("destinations"), dict):
+                config["destinations"] = {}
+            if not isinstance(config.get("keywords"), list):
+                config["keywords"] = []
             if "admins" not in config:
                 config["admins"] = ADMIN_IDS
             return config
     except FileNotFoundError:
         config = {
-            "sources": [],
-            "destinations": [],
+            "sources": {},
+            "destinations": {},
             "keywords": [],
             "admins": ADMIN_IDS
         }
         save_config(config)
         return config
-
+    except Exception as e:
+        print(f"❌ Error loading config: {str(e)}")
+        return None
+    
 def save_config(config):
     try:
         print("Saving config to 'config.json'...")
@@ -171,46 +192,112 @@ async def add_admin(message: Message, state: FSMContext):
     await state.clear()
     
 # Handler for "Ko'rish" (View)
-@dp.callback_query(lambda c: c.data == "view")
-async def process_view(callback_query: CallbackQuery, state: FSMContext):
+@dp.callback_query(lambda c: c.data.startswith("view_"))
+async def process_view(callback_query: CallbackQuery):
     user_id = callback_query.from_user.id
-
     if user_id not in ADMIN_IDS:
         await bot.send_message(user_id, "Sizda bu botni ishlatish uchun ruxsat yo'q! ⚠️")
         return
 
+    print(f"Processing view for user {user_id}, callback: {callback_query.data}")
     config = load_config("config.json")
-    print(f"Config loaded: {config}")
+    if not config:
+        print("Failed to load config.json")
+        await callback_query.answer("⚠️ Config yuklashda xato yuz berdi!")
+        await bot.send_message(
+            user_id,
+            "Config yuklashda xato yuz berdi! ⚠️",
+            reply_markup=main_menu,
+            parse_mode="MarkdownV2"
+        )
+        return
 
-    # Sources
-    sources_dict = config.get("sources", {})
-    sources = '\n'.join(f"`{k}` - {v}" for k, v in sources_dict.items()) if sources_dict else "Hech narsa yo'q"
+    category = callback_query.data.replace("view_", "")
+    category_map = {
+        "sources": "Manbalar 📋",
+        "destinations": "Manzillar 🏠",
+        "keywords": "Kalit so'zlar 🔍",
+        "admins": "Adminlar 👮"
+    }
+    category_name = category_map.get(category)
+    if not category_name:
+        print(f"Invalid category: {category}")
+        await callback_query.answer("Noto'g'ri kategoriya! ⚠️")
+        await bot.send_message(
+            user_id,
+            "Qayta urining! 😊",
+            reply_markup=main_menu,
+            parse_mode="MarkdownV2"
+        )
+        return
 
-    # Destinations
-    destinations_dict = config.get("destinations", {})
-    destinations = '\n'.join(f"`{k}` - {v}" for k, v in destinations_dict.items()) if destinations_dict else "Hech narsa yo'q"
+    text_lines = [f"**{category_name}**:"]
+    print(f"Viewing category: {category}")
+    try:
+        if category in ["sources", "destinations"]:
+            items = config.get(category, {})
+            if not items:
+                text_lines.append(f"⚠️ {category_name} da hech narsa yo'q!")
+            else:
+                for group_id, group_name in items.items():
+                    # Ensure group_name is a string and clean if needed
+                    group_name = str(group_name).replace('\\', '')
+                    text_lines.append(f"• `{group_id}` \\- {group_name}")
+                    print(f"Added {category} item: {group_id} - {group_name}")
+        elif category == "keywords":
+            items = config.get("keywords", [])
+            if not items:
+                text_lines.append(f"⚠️ {category_name} da hech narsa yo'q!")
+            else:
+                for keyword in items:
+                    text_lines.append(f"• {escape_md(str(keyword))}")
+                    print(f"Added keyword: {keyword}")
+        elif category == "admins":
+            items = config.get("admins", [])
+            if not items:
+                text_lines.append(f"⚠️ {category_name} da hech narsa yo'q!")
+            else:
+                for admin_id in items:
+                    text_lines.append(f"• `{admin_id}`")
+                    print(f"Added admin: {admin_id}")
 
-    # Keywords
-    keywords = config.get("keywords", [])
-    keywords_text = '\n'.join(keywords) if keywords else "Hech narsa yo'q"
+        text = "\n".join(text_lines)
+        print(f"Generated text:\n{text}")
+        messages = split_message(text)
+        for i, msg in enumerate(messages):
+            reply_markup = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="Orqaga 🎉", callback_data="back_to_main")]
+            ]) if i == len(messages) - 1 else None
 
-    # Full message
-    full_message = (
-        f"**Manbalar 📋**:\n{sources}\n\n"
-        f"**Manzillar 🏠**:\n{destinations}\n\n"
-        f"**Kalit so'zlar 🔍**:\n{keywords_text}"
-    )
-    print(f"Full message:\n{full_message}")
-
-    await callback_query.answer()
-
-    # Send the message
-    await bot.send_message(
-        chat_id=callback_query.from_user.id,
-        text=full_message,
-        reply_markup=main_menu,
-        parse_mode="Markdown"
-    )
+            await bot.send_message(
+                user_id,
+                msg,
+                reply_markup=reply_markup,
+                parse_mode="MarkdownV2"
+            )
+        await callback_query.answer()
+    except TelegramBadRequest as e:
+        print(f"TelegramBadRequest: {str(e)}")
+        await callback_query.answer("Xatolik yuz berdi!")
+        await bot.send_message(
+            user_id,
+            f"Xatolik yuz berdi: {escape_md(str(e))}. Iltimos, qayta urining!",
+            reply_markup=main_menu,
+            parse_mode="MarkdownV2"
+        )
+    except Exception as e:
+        print(f"Unexpected error in process_view: {str(e)}")
+        await callback_query.answer("Kutilmagan xato yuz berdi!")
+        await bot.send_message(
+            user_id,
+            f"Kutilmagan xato: {escape_md(str(e))}. Iltimos, qayta urining!",
+            reply_markup=main_menu,
+            parse_mode="MarkdownV2"
+        )
+def escape_md_v1(text: str) -> str:
+    """Escape Markdown V1 special characters to prevent formatting issues."""
+    special_chars = r'([*_`\[]])'
+    return re.sub(special_chars, r'\\\1', str(text))
 
 # Handler for "Qo'shish" (Add)
 @dp.callback_query(lambda c: c.data == "add")
@@ -239,18 +326,18 @@ async def process_add_category(callback_query: CallbackQuery, state: FSMContext)
     }
     category_key, state_name = category_map.get(category, ("", None))
     if not state_name:
+        await callback_query.answer("Noto'g'ri kategoriya! ⚠️")
+        await bot.send_message(user_id, "Qayta urining! 😊", reply_markup=main_menu)
         return
 
     await callback_query.answer()
     await state.set_state(state_name)
 
     if category_key in ["manbalar", "manzillar"]:
-        
         # Fetch all groups from cache (no filtering)
         available_groups = get_available_groups()
-
         if available_groups:
-            groups_text = '\n'.join(available_groups)
+            groups_text = '\n'.join(f"`{group_id}` - {escape_md_v1(group_name)}" for group_id, group_name in available_groups.items())
         else:
             groups_text = (
                 "📂 Guruhlar ro'yxati mavjud emas.\n\n"
@@ -270,7 +357,12 @@ async def process_add_category(callback_query: CallbackQuery, state: FSMContext)
                     [InlineKeyboardButton(text="Orqaga 🎉", callback_data="back_to_main")]
                 ]) if i == len(messages) - 1 else None
 
-                await bot.send_message(callback_query.from_user.id, msg, reply_markup=reply_markup, parse_mode="Markdown")
+                await bot.send_message(
+                    callback_query.from_user.id,
+                    msg,
+                    reply_markup=reply_markup,
+                    parse_mode="Markdown"
+                )
 
         except TelegramBadRequest as e:
             print(f"TelegramBadRequest: {str(e)}")
@@ -302,7 +394,7 @@ async def process_add_category(callback_query: CallbackQuery, state: FSMContext)
                 ]),
                 parse_mode="Markdown"
             )
-
+            
 # Handler for adding sources
 @dp.message(ConfigStates.ADDING_SOURCE)
 async def add_source(message: Message, state: FSMContext):
@@ -312,8 +404,11 @@ async def add_source(message: Message, state: FSMContext):
         return
 
     config = load_config("config.json")
-    value = message.text.strip()
+    if not config:
+        await message.reply("⚠️ Config yuklashda xato yuz berdi!", reply_markup=main_menu, parse_mode="Markdown")
+        return
 
+    value = message.text.strip()
     try:
         value = int(value)
         # Normalize the value to -100xxxxxxxxxx format
@@ -321,29 +416,23 @@ async def add_source(message: Message, state: FSMContext):
             value = int(f"-100{value}")
         elif not str(value).startswith("-100"):
             value = int(f"-100{abs(value)}")
+        value = str(value)  # Store as string key
 
-        value = str(value)  # store as string key
-
-        # Check if already exists
         if value in config.get("sources", {}):
             await message.reply(f"⚠️ `{value}` allaqachon mavjud!", reply_markup=main_menu, parse_mode="Markdown")
         else:
-            # Get available group names
-            available_groups = get_available_groups() or {}
+            available_groups = get_available_groups()
             group_name = available_groups.get(value, "Noma'lum guruh")
-
-            # Add to config
             config["sources"][value] = group_name
-            save_config(config)
-            print(f"Added source {value}: {group_name}")
-            await message.reply(f"✅ **Manbalar 📋** ga `{value}` - *{group_name}* qo‘shildi!", reply_markup=main_menu, parse_mode="Markdown")
-
+            if save_config(config):
+                print(f"Added source {value}: {group_name}")
+                await message.reply(f"✅ **Manbalar 📋** ga `{value}` - *{escape_md(group_name)}* qo‘shildi!", reply_markup=main_menu, parse_mode="Markdown")
+            else:
+                await message.reply("⚠️ Config saqlashda xato yuz berdi!", reply_markup=main_menu, parse_mode="Markdown")
     except ValueError:
-        await message.reply("⚠️ Iltimos, to'g'ri ID kiriting (masalan, -1001234567890)!", reply_markup=main_menu)
-
+        await message.reply("⚠️ Iltimos, to'g'ri ID kiriting (masalan, -1001234567890)!", reply_markup=main_menu, parse_mode="Markdown")
     await state.clear()
-
-# Handler for adding destinations
+    
 @dp.message(ConfigStates.ADDING_DESTINATION)
 async def add_destination(message: Message, state: FSMContext):
     user_id = message.from_user.id
@@ -352,8 +441,11 @@ async def add_destination(message: Message, state: FSMContext):
         return
 
     config = load_config("config.json")
-    value = message.text.strip()
+    if not config:
+        await message.reply("⚠️ Config yuklashda xato yuz berdi!", reply_markup=main_menu, parse_mode="Markdown")
+        return
 
+    value = message.text.strip()
     try:
         value = int(value)
         # Normalize to -100xxxxxxxxxx format
@@ -361,31 +453,21 @@ async def add_destination(message: Message, state: FSMContext):
             value = int(f"-100{value}")
         elif not str(value).startswith("-100"):
             value = int(f"-100{abs(value)}")
-
         value = str(value)  # Store as string key
 
         if value in config.get("destinations", {}):
             await message.reply(f"⚠️ `{value}` allaqachon mavjud!", reply_markup=main_menu, parse_mode="Markdown")
         else:
-            # Get group name from available groups
-            available_groups = get_available_groups() or {}
+            available_groups = get_available_groups()
             group_name = available_groups.get(value, "Noma'lum guruh")
-
-            # Add to destinations
             config["destinations"][value] = group_name
             save_config(config)
             print(f"Added destination {value}: {group_name}")
-            await message.reply(
-                f"✅ **Manzillar 🏠** ga `{value}` - *{group_name}* qo‘shildi!",
-                reply_markup=main_menu,
-                parse_mode="Markdown"
-            )
-
+            await message.reply(f"✅ **Manbalar 📋** ga `{value}` - *{escape_md(group_name)}* qo‘shildi!", reply_markup=main_menu, parse_mode="Markdown")
     except ValueError:
-        await message.reply("⚠️ Iltimos, to'g'ri ID kiriting (masalan, -1001234567890)!", reply_markup=main_menu)
-
+        await message.reply("⚠️ Iltimos, to'g'ri ID kiriting (masalan, -1001234567890)!", reply_markup=main_menu, parse_mode="Markdown")
     await state.clear()
-
+    
 # Handler for adding keywords
 @dp.message(ConfigStates.ADDING_KEYWORD)
 async def add_keyword(message: Message, state: FSMContext):
@@ -394,15 +476,29 @@ async def add_keyword(message: Message, state: FSMContext):
         await message.reply("Sizda bu botni ishlatish uchun ruxsat yo'q! ⚠️")
         return
     config = load_config("config.json")
+    if not config:
+        await message.reply("⚠️ Config yuklashda xato yuz berdi!", reply_markup=main_menu, parse_mode="Markdown")
+        return
     value = message.text.strip()
-    if value not in config['keywords']:
-        config['keywords'].append(value)
-        save_config(config)
-        await message.reply(f"✅ **Kalit so'zlar 🔍** ga '{value}' qo'shildi!", reply_markup=main_menu, parse_mode="Markdown")
-    else:
-        await message.reply(f"⚠️ '{value}' allaqachon mavjud!", reply_markup=main_menu, parse_mode="Markdown")
+    if not value:
+        await message.reply("⚠️ Kalit so'z bo'sh bo'lmasligi kerak!", reply_markup=main_menu, parse_mode="Markdown")
+        await state.clear()
+        return
+    try:
+        value = value.encode().decode("utf-8")  # Normalize encoding
+        if value not in config["keywords"]:
+            config["keywords"].append(value)
+            if save_config(config):
+                await message.reply(f"✅ **Kalit so'zlar 🔍** ga '{escape_md(value)}' qo'shildi!", reply_markup=main_menu, parse_mode="Markdown")
+            else:
+                await message.reply("⚠️ Config saqlashda xato yuz berdi!", reply_markup=main_menu, parse_mode="Markdown")
+        else:
+            await message.reply(f"⚠️ '{escape_md(value)}' allaqachon mavjud!", reply_markup=main_menu, parse_mode="Markdown")
+    except UnicodeEncodeError as e:
+        print(f"Error encoding keyword: {e}")
+        await message.reply("⚠️ Kalit so'zda xato yuz berdi, iltimos qayta urining!", reply_markup=main_menu, parse_mode="Markdown")
     await state.clear()
-
+        
 # Handler for "O'chirish" (Delete)
 @dp.callback_query(lambda c: c.data == "delete")
 async def process_delete(callback_query: CallbackQuery, state: FSMContext):
@@ -427,46 +523,47 @@ async def process_delete_category(callback_query: CallbackQuery, state: FSMConte
     category_key = category_map.get(category)
 
     if not category_key:
+        await callback_query.answer("Noto'g'ri kategoriya! ⚠️")
+        await bot.send_message(user_id, "Qayta urining! 😊", reply_markup=main_menu)
         return
 
-    await callback_query.answer()
-
     delete_menu = InlineKeyboardMarkup(inline_keyboard=[])
+    empty_message = f"⚠️ **{category_key.capitalize()} 📋🏠🔍** da hech narsa yo'q!"
 
     if category in ["sources", "destinations"]:
         items_dict = config.get(category, {})
         if not items_dict:
-            await bot.send_message(callback_query.from_user.id, f"⚠️ **{category_key.capitalize()} 📋🏠🔍** da hech narsa yo'q!", reply_markup=main_menu, parse_mode="Markdown")
+            await callback_query.answer()
+            await bot.send_message(callback_query.from_user.id, empty_message, reply_markup=main_menu, parse_mode="Markdown")
             return
-
         for group_id, group_name in items_dict.items():
-            btn_text = f"{group_name} [`{group_id}`]"
+            btn_text = f"{escape_md(group_name)} [`{group_id}`]"
             delete_menu.inline_keyboard.append([
                 InlineKeyboardButton(text=btn_text, callback_data=f"delete_{category}_{group_id}")
             ])
-
     elif category == "keywords":
         items = config.get("keywords", [])
         if not items:
-            await bot.send_message(callback_query.from_user.id, f"⚠️ **{category_key.capitalize()} 📋🏠🔍** da hech narsa yo'q!", reply_markup=main_menu, parse_mode="Markdown")
+            await callback_query.answer()
+            await bot.send_message(callback_query.from_user.id, empty_message, reply_markup=main_menu, parse_mode="Markdown")
             return
-
         for keyword in items:
             delete_menu.inline_keyboard.append([
-                InlineKeyboardButton(text=keyword, callback_data=f"delete_{category}_{keyword}")
+                InlineKeyboardButton(text=escape_md(keyword), callback_data=f"delete_{category}_{keyword}")
             ])
 
     delete_menu.inline_keyboard.append([
         InlineKeyboardButton(text="Orqaga 🎉", callback_data="back_to_main")
     ])
 
+    await callback_query.answer()
     await bot.send_message(
         callback_query.from_user.id,
         f"**{category_key.capitalize()} 📋🏠🔍** dan o'chirish uchun tanlang: 😊",
         reply_markup=delete_menu,
         parse_mode="Markdown"
     )
-
+    
 # Handler for deleting items
 @dp.callback_query(lambda c: c.data.startswith("delete_"))
 async def process_delete_item(callback_query: CallbackQuery, state: FSMContext):
@@ -567,22 +664,6 @@ from user_bot import get_groups_dict
  # Split a long message into parts
 MAX_MESSAGE_LENGTH = 4096  # Telegram's max message length
 
-def split_message(text, max_length=MAX_MESSAGE_LENGTH):
-    lines = text.split('\n')
-    messages = []
-    current_message = []
-    current_length = 0
-    for line in lines:
-        if current_length + len(line) + 1 > max_length:
-            messages.append('\n'.join(current_message))
-            current_message = [line]
-            current_length = len(line) + 1
-        else:
-            current_message.append(line)
-            current_length += len(line) + 1
-    if current_message:
-        messages.append('\n'.join(current_message))
-    return messages
 
 # Handler for Guruhlarim
 @dp.callback_query(lambda c: c.data == "groups")
