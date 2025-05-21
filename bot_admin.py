@@ -19,7 +19,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_IDS = [int(x.strip()) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip()]
 API_ID = os.getenv("API_ID")
 API_HASH = os.getenv("API_HASH")
-SESSION_NAME = "admin_session"
+SESSION_NAME = "admin_session"  
 SUPERADMIN = int(os.getenv("SUPERADMIN", "0"))
 CONFIG_FILE = "groups_config.json"
 
@@ -105,24 +105,28 @@ def save_config(config):
 
 def split_message(text: str, max_length: int = 4096) -> list:
     """Split a message into parts that fit within Telegram's max message length."""
-    if len(text) <= max_length:
-        return [text]
-    
-    messages = []
-    current_message = ""
-    lines = text.split("\n")
-    
-    for line in lines:
-        if len(current_message) + len(line) + 1 > max_length:
+    try:
+        if len(text) <= max_length:
+            return [text]
+        
+        messages = []
+        current_message = ""
+        lines = text.split("\n")
+        
+        for line in lines:
+            if len(current_message) + len(line) + 1 > max_length:
+                messages.append(current_message.strip())
+                current_message = line + "\n"
+            else:
+                current_message += line + "\n"
+        
+        if current_message.strip():
             messages.append(current_message.strip())
-            current_message = line + "\n"
-        else:
-            current_message += line + "\n"
-    
-    if current_message.strip():
-        messages.append(current_message.strip())
-    
-    return messages
+        
+        return messages
+    except Exception as e:
+        print(f"error at split message: {e}")
+        
 # Initial config load
 config = load_config("config.json")
 ADMIN_IDS = config.get("admins", ADMIN_IDS) 
@@ -283,20 +287,23 @@ async def process_add_category(callback_query: CallbackQuery, state: FSMContext)
 
     if category_key in ["manbalar", "manzillar"]:
         # Fetch all groups from cache (no filtering)
-        available_groups = get_available_groups()
-        if available_groups:
-            groups_text = '\n'.join(f"`{group_id}` - {escape_md(group_name)}" for group_id, group_name in available_groups.items())
-        else:
-            groups_text = (
-                "📂 Guruhlar ro'yxati mavjud emas.\n\n"
-                "Iltimos, guruhlar ro'yxatini yangilash uchun **bosh menyudan** "
-                "**Guruhlarim 📂** tugmasini bosing."
-            )
+        try:
+            available_groups = get_available_groups() or {}
+            if available_groups:
+                groups_text = '\n'.join(f"`{group_id}` - {escape_md(group_name)}" for group_id, group_name in available_groups.items())
+            else:
+                groups_text = (
+                    "📂 Guruhlar ro'yxati mavjud emas.\n\n"
+                    "Iltimos, guruhlar ro'yxatini yangilash uchun **bosh menyudan** "
+                    "**Guruhlarim 📂** tugmasini bosing."
+                )
 
-        prompt = (
-            f"Iltimos, **{category_key.capitalize()} 📋** qo'shish uchun guruh ID sini kiriting "
-            f"(masalan, -1001234567890). 😊\n\nMavjud guruhlar ro'yxati:\n\n{groups_text}"
-        )
+            prompt = (
+                f"Iltimos, **{category_key.capitalize()} 📋** qo'shish uchun guruh ID sini kiriting "
+                f"(masalan, -1001234567890). 😊\n\nMavjud guruhlar ro'yxati:\n\n{groups_text}"
+            )
+        except Exception as e:
+            print(e)
 
         try:
             messages = split_message(prompt)
