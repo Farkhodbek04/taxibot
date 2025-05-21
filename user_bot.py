@@ -32,7 +32,6 @@ if BOT_TOKEN and SUPERADMIN:
 config = {}
 source_ids = {}
 destination_ids = {}
-ad_keywords = set()
 keywords = []
 my_groups = {}
 
@@ -106,13 +105,12 @@ async def get_groups_dict():
 
 # Load initial configuration
 def load_config():
-    global config, source_ids, destination_ids, ad_keywords, keywords
+    global config, source_ids, destination_ids, keywords
     try:
         config = read_config()
         source_ids = [int(f"-100{abs(id)}" if int(id) >= 0 else str(id)) for id in config.get('sources', {}).keys()]
         destination_ids = [int(f"-100{abs(id)}" if int(id) >= 0 else str(id)) for id in config.get('destinations', {}).keys()]
-        keyw = config['keywords'] or []
-        keywords = [key for key in config['keywords']]
+        keywords = list(config.get('keywords', []))
     except Exception as e:
         error_msg = f"Error loading config in user_bot: {str(e)}"
         print(error_msg)
@@ -145,7 +143,7 @@ async def is_client_request(message):
         if total_words == 1:
             return matched_words == 1
         if total_words <= 8:
-            return matched_words >= 2 and match_percentage >= 50
+            return  match_percentage >= 50
         elif total_words > 9:
             return match_percentage >= 60
     except Exception as e:
@@ -226,20 +224,19 @@ async def config_poller():
         if bot and SUPERADMIN:
             await bot.send_message(SUPERADMIN, f"🚨 UserBot: {error_msg} ⚠️")
         raise
-
+    
 async def user_bot_main():
+    asyncio.create_task(config_poller())
     try:
         await client.start()
         print("User bot ishga tushdi va xabarlarni kuzatmoqda...")
-        asyncio.create_task(config_poller())
-        asyncio.create_task(fetch_my_groups_with_id(client))
         await client.run_until_disconnected()
     except Exception as e:
         error_msg = f"User bot failed: {str(e)}"
         print(error_msg)
         with open('error.log', 'a') as log_file:
             log_file.write(f"{error_msg}\n")
-        if bot and SUPERADMIN:
+        if bot and SUPERADMIN and not str(e).startswith("argument of type 'NoneType' "):
             await bot.send_message(SUPERADMIN, f"🚨 UserBot: {error_msg} ⚠️")
         raise
 
