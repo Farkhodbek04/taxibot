@@ -6,6 +6,8 @@ from user_bot import user_bot_main
 from aiogram import Bot
 from dotenv import load_dotenv
 import os
+import telethon
+import aiohttp
 
 # Load environment variables
 load_dotenv()
