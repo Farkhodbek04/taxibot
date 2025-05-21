@@ -112,7 +112,7 @@ def load_config():
         source_ids = [int(f"-100{abs(id)}" if int(id) >= 0 else str(id)) for id in config.get('sources', {}).keys()]
         destination_ids = [int(f"-100{abs(id)}" if int(id) >= 0 else str(id)) for id in config.get('destinations', {}).keys()]
         keyw = config['keywords'] or []
-        keywords = [key for key in keyw]
+        keywords = [key for key in config['keywords']]
     except Exception as e:
         error_msg = f"Error loading config in user_bot: {str(e)}"
         print(error_msg)
