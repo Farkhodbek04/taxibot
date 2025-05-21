@@ -12,6 +12,9 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.exceptions import TelegramBadRequest
 from dotenv import load_dotenv
 
+from user_bot import get_groups_dict
+MAX_MESSAGE_LENGTH = 4096  # Telegram's max message length
+
 
 # Load environment variables
 load_dotenv()
@@ -99,9 +102,12 @@ def save_config(config):
             file.write("reload")
 
         print("✅ Config saved successfully.")
+        return True
     except Exception as e:
         print(f"❌ Error saving config: {str(e)}")
-        raise
+        if SUPERADMIN:
+            asyncio.create_task(bot.send_message(SUPERADMIN, f"🚨 Config saqlashda xatolik: {str(e)} ⚠️"))
+        return False  # Indicate failure
 
 def split_message(text: str, max_length: int = 4096) -> list:
     """Split a message into parts that fit within Telegram's max message length."""
@@ -366,11 +372,6 @@ async def add_source(message: Message, state: FSMContext):
     value = message.text.strip()
     try:
         value = int(value)
-        # Normalize the value to -100xxxxxxxxxx format
-        if value >= 0:
-            value = int(f"-100{value}")
-        elif not str(value).startswith("-100"):
-            value = int(f"-100{abs(value)}")
         value = str(value)  # Store as string key
 
         if value in config.get("sources", {}):
@@ -403,11 +404,6 @@ async def add_destination(message: Message, state: FSMContext):
     value = message.text.strip()
     try:
         value = int(value)
-        # Normalize to -100xxxxxxxxxx format
-        if value >= 0:
-            value = int(f"-100{value}")
-        elif not str(value).startswith("-100"):
-            value = int(f"-100{abs(value)}")
         value = str(value)  # Store as string key
 
         if value in config.get("destinations", {}):
@@ -440,7 +436,7 @@ async def add_keyword(message: Message, state: FSMContext):
         await state.clear()
         return
     try:
-        value = value.encode().decode("utf-8")  # Normalize encoding
+        value = value.encode('utf-8').decode('utf-8', errors='ignore')
         if value not in config["keywords"]:
             config["keywords"].append(value)
             if save_config(config) or 1:
@@ -581,10 +577,6 @@ async def process_back(callback_query: CallbackQuery, state: FSMContext):
     await state.clear()
     await callback_query.answer()
     await bot.send_message(callback_query.from_user.id, "Asosiy menyuga qaytdingiz! 🎉", reply_markup=main_menu)
-
-from user_bot import get_groups_dict
-MAX_MESSAGE_LENGTH = 4096  # Telegram's max message length
-
 
 # Handler for Guruhlarim
 @dp.callback_query(lambda c: c.data == "groups")

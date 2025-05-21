@@ -75,7 +75,7 @@ async def fetch_my_groups_with_id(client):
             elif isinstance(entity, Chat):  # classic group
                 group_id = entity.id
                 name = entity.title
-                id_str = f"-100{str(group_id)}"
+                id_str = f"-{str(group_id)}"
                 my_groups[id_str] = f"[{name}](Classic guruh - havola yo'q)"
     except Exception as e:
         error_msg = f"{datetime.now()} Error with getting groups list:{str(e)}"
@@ -108,8 +108,8 @@ def load_config():
     global config, source_ids, destination_ids, keywords
     try:
         config = read_config()
-        source_ids = [int(f"-100{abs(id)}" if int(id) >= 0 else str(id)) for id in config.get('sources', {}).keys()]
-        destination_ids = [int(f"-100{abs(id)}" if int(id) >= 0 else str(id)) for id in config.get('destinations', {}).keys()]
+        source_ids = [int(id) for id in config.get('sources', {}).keys()]
+        destination_ids = [int(id) for id in config.get('destinations', {}).keys()]
         keywords = list(config.get('keywords', []))
     except Exception as e:
         error_msg = f"Error loading config in user_bot: {str(e)}"
@@ -135,6 +135,8 @@ async def is_client_request(message):
         return False
     if not words:
         return False
+    if not keywords:  # Check if keywords is empty
+        return False
     try:
         loop = asyncio.get_event_loop()
         matched_words = await loop.run_in_executor(None, lambda: sum(1 for word in words if process.extractOne(word, keywords, scorer=fuzz.partial_ratio, score_cutoff=80)))
@@ -159,7 +161,7 @@ async def is_client_request(message):
 async def handler(event):
     try:
         message_text = event.message.message or ''
-        chat_id = int(f"-100{abs(event.chat_id)}" if event.chat_id >= 0 else str(event.chat_id))
+        chat_id = event.chat_id
         if chat_id in source_ids and len(message_text) <= 80:
             if await is_client_request(message_text):
                 sender = await event.get_sender()
@@ -168,7 +170,7 @@ async def handler(event):
                 phone = sender.phone if sender.phone else "Noma'lum"
                 chat = await event.get_chat()
                 group_name = chat.title if chat.title else "Unknown Group"
-                group_link = f"https://t.me/c/{str(chat_id).replace('-100', '')}/{event.message.id}"
+                group_link = f"https://t.me/c/{str(chat_id).replace('-100', '').replace('-', '')}/{event.message.id}"
                 message_time = event.message.date
                 formatted_time = message_time.strftime("%Y-%m-%d %H:%M")
                 formatted_message = (
@@ -183,10 +185,7 @@ async def handler(event):
                 
                 for dest_id in destination_ids:
                     try:
-                        # Strip -100 prefix for sending
-                        send_id = int(str(dest_id).replace("-100", "-"))
-                        entity = await client.get_entity(send_id)
-                        print(dest_id)
+                        entity = await client.get_entity(dest_id)
                         print(f"Sending to {dest_id}")
                         await client.send_message(entity, formatted_message, parse_mode='markdown', link_preview=False)
                     except Exception as e:
