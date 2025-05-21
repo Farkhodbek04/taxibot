@@ -631,6 +631,7 @@ async def main():
         await dp.start_polling(bot, skip_updates=True)
     except Exception as e:
         # Log error to file
+        print(e)
         with open('error.log', 'a', encoding='utf-8') as log_file:
             log_file.write(f"Error: {str(e)}\n")
         # Notify superadmin

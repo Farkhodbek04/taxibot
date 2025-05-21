@@ -49,6 +49,7 @@ def read_config():
             return json.load(f)
     except Exception as e:
         error_msg = f"{datetime.now()} Error reading config.json in user_bot: {str(e)}"
+        print( error_msg)
         with open('error.log', 'a', encoding='utf-8') as log_file:
             log_file.write(f"{error_msg}\n")
         if bot and SUPERADMIN:
@@ -79,6 +80,7 @@ async def fetch_my_groups_with_id(client):
                 my_groups[id_str] = f"[{name}](Classic guruh - havola yo'q)"
     except Exception as e:
         error_msg = f"{datetime.now()} Error with getting groups list:{str(e)}"
+        print(error_msg)
         with open("error.log", "a") as f:
             f.write(f"{error_msg}\n")
         if bot and SUPERADMIN:
@@ -95,6 +97,7 @@ async def get_groups_dict():
         return my_groups   
     except Exception as e:
         error_msg = f"{datetime.now()} Error with getting groups list:{str(e)}"
+        print(error_msg)
         with open("error.log", "a") as f:
             f.write(f"{error_msg}\n")
         if bot and SUPERADMIN:
@@ -111,6 +114,7 @@ def load_config():
         keywords = [key for key in config['keywords']]
     except Exception as e:
         error_msg = f"Error loading config in user_bot: {str(e)}"
+        print(error_msg)
         with open('error.log', 'a') as log_file:
             log_file.write(f"{error_msg}\n")
         if bot and SUPERADMIN:
@@ -145,6 +149,7 @@ async def is_client_request(message):
             return match_percentage >= 60
     except Exception as e:
         error_msg = f"Error in is_client_request: {str(e)}"
+        print(error_msg)
         with open('error.log', 'a') as log_file:
             log_file.write(f"{error_msg}\n")
         if bot and SUPERADMIN:
@@ -187,6 +192,7 @@ async def handler(event):
                         await client.send_message(entity, formatted_message, parse_mode='markdown', link_preview=False)
                     except Exception as e:
                         error_msg = f"{datetime.now()} Error with sending:{str(e)}"
+                        print(error_msg)
                         with open("error.log", "a") as f:
                             f.write(f"{error_msg}\n")
                         if bot and SUPERADMIN:
@@ -213,6 +219,7 @@ async def config_poller():
                 last_modified = current_modified
     except Exception as e:
         error_msg = f"Error in config poller: {str(e)}"
+        print(error_msg)
         with open('error.log', 'a') as log_file:
             log_file.write(f"{error_msg}\n")
         if bot and SUPERADMIN:
@@ -228,6 +235,7 @@ async def user_bot_main():
         await client.run_until_disconnected()
     except Exception as e:
         error_msg = f"User bot failed: {str(e)}"
+        print(error_msg)
         with open('error.log', 'a') as log_file:
             log_file.write(f"{error_msg}\n")
         if bot and SUPERADMIN:
