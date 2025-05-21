@@ -88,6 +88,8 @@ def load_config(file_name: str):
     except Exception as e:
         print(f"❌ Error loading config: {str(e)}")
         return None
+    finally:
+        return {}
     
 def save_config(config):
     try:

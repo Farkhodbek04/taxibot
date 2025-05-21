@@ -29,7 +29,7 @@ if BOT_TOKEN and SUPERADMIN:
     bot = Bot(token=BOT_TOKEN)
 
 # Global variables to store configuration
-config = None
+config = {}
 source_ids = {}
 destination_ids = {}
 ad_keywords = set()
@@ -111,7 +111,8 @@ def load_config():
         config = read_config()
         source_ids = [int(f"-100{abs(id)}" if int(id) >= 0 else str(id)) for id in config.get('sources', {}).keys()]
         destination_ids = [int(f"-100{abs(id)}" if int(id) >= 0 else str(id)) for id in config.get('destinations', {}).keys()]
-        keywords = [key for key in config['keywords']]
+        keyw = config['keywords'] or []
+        keywords = [key for key in keyw]
     except Exception as e:
         error_msg = f"Error loading config in user_bot: {str(e)}"
         print(error_msg)
