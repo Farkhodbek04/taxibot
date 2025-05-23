@@ -3,12 +3,12 @@ import os
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 from telethon.tl.types import Channel, Chat, User
+from telethon import TelegramClient, Button
 from telethon.errors import SessionPasswordNeededError, ApiIdInvalidError, AuthKeyUnregisteredError
 from rapidfuzz import process, fuzz
 from dotenv import load_dotenv
 from datetime import datetime
 import asyncio
-import time
 
 
 # Load environment variables
@@ -128,10 +128,15 @@ except Exception as e:
     raise
 
 async def is_client_request(message):
-    if not message:
+    negatives = {'olamiz', 'olyappiz', 'yuramiz', 'yuryappiz', 'yuriladi', 'kam', 'benzin', 'propan', 'prapan', "bo'sh",
+    'оламиз', 'олйаппиз', 'йурамиз', 'йурйаппиз', 'йурилади', 'кам', 'бензин', 'пропан', 'прапан', 'бош', "юрамиз", 
+    "юрйаппиз", "юрилади", "оляппиз", "оляпиз", "йуряппиз", "йуряпиз", "olyapiz", "yuryapiz"}
+    if sum(1 if val in negatives  else 0 for val in message.split()) >= 2:
         return False
+    
     words = message.split()
-    if len(words) >= 16:
+    
+    if len(words) > 10:
         return False
     if not words:
         return False
@@ -159,51 +164,42 @@ async def is_client_request(message):
 
 @client.on(events.NewMessage)
 async def handler(event):
+    from bot_admin import send_to_group
     try:
-        message_text = event.message.message or ''
+        message_text = event.message.message
         chat_id = event.chat_id
-        if chat_id in source_ids and len(message_text) <= 80:
+        sender_id = 0
+        if chat_id in source_ids:
             if await is_client_request(message_text):
+                print(message_text)
                 sender = await event.get_sender()
-                username = sender.username if sender.username else f"tg://user?id={sender.id}"
-                username_display = f"@{sender.username}" if sender.username else f"UserID: {sender.id}"
-                phone = sender.phone if sender.phone else "Noma'lum"
-                chat = await event.get_chat()
-                group_name = chat.title if chat.title else "Unknown Group"
-                group_link = f"https://t.me/c/{str(chat_id).replace('-100', '').replace('-', '')}/{event.message.id}"
-                message_time = event.message.date
-                formatted_time = message_time.strftime("%Y-%m-%d %H:%M")
+                sender_id = sender.id
                 formatted_message = (
-                    "🚖 Yangi Taksi So'rovi\n"
-                    f"👤 Kimdan: [{username_display}]({username})\n"
-                    f"📞 Telefon: {phone}\n"
-                    f"🏢 Guruh: {group_name} ([Manba]({group_link}))\n"
-                    f"🕒 Vaqt: {formatted_time}\n"
-                    f"💬 Xabar: {message_text}"
+                    "🚖 Yangi kilent\n\n"                    
+                    f"<b>XABAR:</b> {message_text} \n"
                 )
-                print(destination_ids)
+                if sender.username:
+                    formatted_message = formatted_message+f"\n@{sender.username}"
                 
                 for dest_id in destination_ids:
                     try:
-                        entity = await client.get_entity(dest_id)
                         print(f"Sending to {dest_id}")
-                        await client.send_message(entity, formatted_message, parse_mode='markdown', link_preview=False)
+                        await send_to_group(dest_id, sender_id, formatted_message)
                     except Exception as e:
                         error_msg = f"{datetime.now()} Error with sending:{str(e)}"
                         print(error_msg)
                         with open("error.log", "a") as f:
                             f.write(f"{error_msg}\n")
-                        if bot and SUPERADMIN:
+                        if bot and SUPERADMIN and "NoneType" not in str(e):
                             asyncio.create_task(bot.send_message(SUPERADMIN, f"🚨 UserBot: {error_msg} ⚠️"))
                         print(f"Eroor: {e}")
-                        raise
-                    
+                        raise         
     except Exception as e:
         error_msg = f"Error in message handler: {str(e)}"
         print(error_msg)
         with open('error.log', 'a') as log_file:
             log_file.write(f"{error_msg}\n")
-        if bot and SUPERADMIN:
+        if bot and SUPERADMIN and "NoneType" not in str(e):
             await bot.send_message(SUPERADMIN, f"🚨 UserBot: {error_msg} ⚠️")
 
 async def config_poller():
@@ -225,9 +221,9 @@ async def config_poller():
         raise
     
 async def user_bot_main():
-    asyncio.create_task(config_poller())
     try:
         await client.start()
+        asyncio.create_task(config_poller())
         print("User bot ishga tushdi va xabarlarni kuzatmoqda...")
         await client.run_until_disconnected()
     except Exception as e:
@@ -235,7 +231,7 @@ async def user_bot_main():
         print(error_msg)
         with open('error.log', 'a') as log_file:
             log_file.write(f"{error_msg}\n")
-        if bot and SUPERADMIN and not str(e).startswith("argument of type 'NoneType' "):
+        if bot and SUPERADMIN and "NoneType" not in str(e):
             await bot.send_message(SUPERADMIN, f"🚨 UserBot: {error_msg} ⚠️")
         raise
 

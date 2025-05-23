@@ -18,7 +18,7 @@ MAX_MESSAGE_LENGTH = 4096  # Telegram's max message length
 
 # Load environment variables
 load_dotenv()
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+BOT_TOKEN = "7607758454:AAF0xFJPgqi1sgjfHPsCH9Qj-CZXd65mLTw"
 ADMIN_IDS = [int(x.strip()) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip()]
 API_ID = os.getenv("API_ID")
 API_HASH = os.getenv("API_HASH")
@@ -30,6 +30,23 @@ CONFIG_FILE = "groups_config.json"
 bot = Bot(token=BOT_TOKEN)
 storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
+
+async def send_to_group(group_id, sender_id, formatted_message):
+    # Create the inline button
+    inline_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Kilent lichkasi", url=f"tg://user?id={sender_id}")]
+    ])
+    try:
+        await bot.send_message(
+            chat_id=group_id,
+            text=formatted_message,
+            parse_mode="HTML",
+            disable_web_page_preview=True,
+            reply_markup=inline_keyboard
+        )
+        print(f"Message sent to group {group_id}")
+    except Exception as e:
+        print(f"Failed to send message to group {group_id}: {e}")
 
 def escape_md(text: str) -> str:
     """
@@ -634,7 +651,7 @@ async def main():
         with open('error.log', 'a', encoding='utf-8') as log_file:
             log_file.write(f"Error: {str(e)}\n")
         # Notify superadmin
-        if SUPERADMIN and not str(e).startswith("argument of type 'NoneType' "):
+        if SUPERADMIN and "argument of type 'NoneType'" not in str(e):
             try:
                 await bot.send_message(SUPERADMIN, f"🚨 Botda xatolik yuz berdi: {str(e)} ⚠️")
             except Exception as notify_error:
