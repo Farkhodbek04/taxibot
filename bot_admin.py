@@ -18,7 +18,7 @@ MAX_MESSAGE_LENGTH = 4096  # Telegram's max message length
 
 # Load environment variables
 load_dotenv()
-BOT_TOKEN = "7607758454:AAF0xFJPgqi1sgjfHPsCH9Qj-CZXd65mLTw"
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_IDS = [int(x.strip()) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip()]
 API_ID = os.getenv("API_ID")
 API_HASH = os.getenv("API_HASH")
