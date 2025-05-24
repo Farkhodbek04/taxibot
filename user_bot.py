@@ -15,7 +15,7 @@ import asyncio
 load_dotenv()
 API_ID = int(os.getenv("API_ID"))
 API_HASH = os.getenv("API_HASH")
-SESSION_NAME = "user_session"
+SESSION_NAME = "my_user"
 SUPERADMIN = int(os.getenv("SUPERADMIN", "0"))
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
@@ -130,8 +130,8 @@ except Exception as e:
 async def is_client_request(message):
     negatives = {'olamiz', 'olyappiz', 'yuramiz', 'yuryappiz', 'yuriladi', 'kam', 'benzin', 'propan', 'prapan', "bo'sh",
     'оламиз', 'олйаппиз', 'йурамиз', 'йурйаппиз', 'йурилади', 'кам', 'бензин', 'пропан', 'прапан', 'бош', "юрамиз", 
-    "юрйаппиз", "юрилади", "оляппиз", "оляпиз", "йуряппиз", "йуряпиз", "olyapiz", "yuryapiz"}
-    if sum(1 if val in negatives  else 0 for val in message.split()) >= 2:
+    "юрйаппиз", "юрилади", "оляппиз", "оляпиз", "йуряппиз", "йуряпиз", "olyapiz", "yuryapiz", "pustoy", "пустой"}
+    if sum(1 if val.lower() in negatives  else 0 for val in message.split()) >= 1:
         return False
     
     words = message.split()
@@ -184,7 +184,7 @@ async def handler(event):
                 for dest_id in destination_ids:
                     try:
                         print(f"Sending to {dest_id}")
-                        await send_to_group(dest_id, sender_id, formatted_message)
+                        await send_to_group(dest_id, sender_id, formatted_message, sender.username)
                     except Exception as e:
                         error_msg = f"{datetime.now()} Error with sending:{str(e)}"
                         print(error_msg)

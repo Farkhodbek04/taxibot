@@ -31,18 +31,16 @@ bot = Bot(token=BOT_TOKEN)
 storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 
-async def send_to_group(group_id, sender_id, formatted_message):
-    # Create the inline button
-    inline_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Kilent lichkasi", url=f"tg://user?id={sender_id}")]
-    ])
+async def send_to_group(group_id, sender_id, formatted_message, sender_username=None):
+    print(f"Attempting to send to group {group_id} with sender_id {sender_id}")
+    formatted_message = formatted_message + f"\n👤 <a href='tg://user?id={sender_id}'>KILENT</a>"
+
     try:
         await bot.send_message(
             chat_id=group_id,
             text=formatted_message,
             parse_mode="HTML",
             disable_web_page_preview=True,
-            reply_markup=inline_keyboard
         )
         print(f"Message sent to group {group_id}")
     except Exception as e:
