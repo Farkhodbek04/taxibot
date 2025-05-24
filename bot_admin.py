@@ -22,7 +22,6 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_IDS = [int(x.strip()) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip()]
 API_ID = os.getenv("API_ID")
 API_HASH = os.getenv("API_HASH")
-SESSION_NAME = "admin_session"  
 SUPERADMIN = int(os.getenv("SUPERADMIN", "0"))
 CONFIG_FILE = "groups_config.json"
 
@@ -31,9 +30,11 @@ bot = Bot(token=BOT_TOKEN)
 storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 
-async def send_to_group(group_id, sender_id, formatted_message, sender_username=None):
+async def send_to_group(group_id, sender_id, formatted_message, sender_username=None, source_chat_id=None, message_id=None):
     print(f"Attempting to send to group {group_id} with sender_id {sender_id}")
-    formatted_message = formatted_message + f"\n👤 <a href='tg://user?id={sender_id}'>KILENT</a>"
+    chat_id_str = str(source_chat_id).replace("-100", "")
+    message_link = f"https://t.me/c/{chat_id_str}/{message_id}"
+    formatted_message += f"\n👤 <a href='{message_link}'>KILENT</a>"
 
     try:
         await bot.send_message(

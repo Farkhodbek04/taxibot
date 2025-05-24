@@ -15,7 +15,7 @@ import asyncio
 load_dotenv()
 API_ID = int(os.getenv("API_ID"))
 API_HASH = os.getenv("API_HASH")
-SESSION_NAME = "my_user"
+SESSION_NAME = "user_session"
 SUPERADMIN = int(os.getenv("SUPERADMIN", "0"))
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
@@ -178,13 +178,14 @@ async def handler(event):
                     "🚖 Yangi kilent\n\n"                    
                     f"<b>XABAR:</b> {message_text} \n"
                 )
+                message_id = event.message.id
                 if sender.username:
                     formatted_message = formatted_message+f"\n@{sender.username}"
                 
                 for dest_id in destination_ids:
                     try:
                         print(f"Sending to {dest_id}")
-                        await send_to_group(dest_id, sender_id, formatted_message, sender.username)
+                        await send_to_group(dest_id, sender_id, formatted_message, sender.username, chat_id, message_id)
                     except Exception as e:
                         error_msg = f"{datetime.now()} Error with sending:{str(e)}"
                         print(error_msg)
