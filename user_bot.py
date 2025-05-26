@@ -128,11 +128,12 @@ except Exception as e:
     raise
 
 async def is_client_request(message):
-    negatives = {'olamiz', 'olyappiz', 'yuramiz', 'yuryappiz', 'yuriladi', 'kam', 'benzin', 'propan', 'prapan', "bo'sh",
-    'оламиз', 'олйаппиз', 'йурамиз', 'йурйаппиз', 'йурилади', 'кам', 'бензин', 'пропан', 'прапан', 'бош', "юрамиз", 
-    "юрйаппиз", "юрилади", "оляппиз", "оляпиз", "йуряппиз", "йуряпиз", "olyapiz", "yuryapiz", "pustoy", "пустой", "олиб", 
-    "olib", "юрдик", "почталар", "yudik", "pochtalar", "reklama", "руки", "выкопать", "кобалт", "дня", "присмотреть", "рахмат", "топтим", "топдим", "raxmat", "rahmat"}
-    
+    negatives = {'olamiz', 'olyappiz', "olyappiz.", 'yuramiz', 'yuramiz.', 'yuryappiz', 'yuryappiz.', 'yuriladi', 'yuriladi.', 'kam', 'benzin', 'propan', 'prapan', "bo'sh",
+    'оламиз', 'оламиз.', 'олйаппиз', 'олйаппиз.', 'йурамиз', 'йурамиз.', 'йурйаппиз', 'йурйаппиз.', 'йурилади', 'йурилади.', 'кам', 'кам.', 'бензин', 'бензин.', 'пропан', 
+    'пропан.', 'прапан', 'прапан.', "юрамиз", "юрйаппиз", "юрилади", "оляппиз", "оляпиз", "йуряппиз", "йуряпиз", "olyapiz", "yuryapiz", "pustoy", "пустой", "олиб", 
+    "olib", "юрдик", "почталар", "yudik", "pochtalar", "reklama", "руки", "выкопать", "кобалт", "дня", "присмотреть", "рахмат", 
+    "топтим", "топдим", "raxmat", "rahmat", "topildi", "топилди", "топилди.", "olamiz.", "bot", "бот"}
+        
     if sum(1 if val.lower() in negatives  else 0 for val in message.split()) >= 1:
         return False
     
@@ -143,7 +144,11 @@ async def is_client_request(message):
     
     words = message.split()
     
-    if len(words) > 10:
+    for word in words:
+        if word.startswith("https"):
+            return False
+    
+    if len(words) > 11:
         return False
     if not words:
         return False
@@ -168,16 +173,29 @@ async def is_client_request(message):
         if bot and SUPERADMIN:
             await bot.send_message(SUPERADMIN, f"🚨 UserBot: {error_msg} ⚠️")
         return False
+    
+import re
+from telethon.tl.types import MessageEntityTextUrl
+url_pattern = r'(https?://[^\s]+)'
 
 @client.on(events.NewMessage)
 async def handler(event):
     from bot_admin import send_to_group
+    links = []
     try:
         message_text = event.message.message
         chat_id = event.chat_id
         sender_id = 0
+    
+        
+        
         if chat_id in source_ids:
-            if len(message_text) <= 100 and await is_client_request(message_text):
+            if message_text and len(message_text) <= 100 and await is_client_request(message_text):
+                if event.message.entities:
+                    for entity in event.message.entities:
+                        if isinstance(entity, MessageEntityTextUrl):
+                            links.append(entity.url)
+                    print(f"URLs: {links}")
                 print(message_text)
                 sender = await event.get_sender()
                 sender_id = sender.id
@@ -187,13 +205,18 @@ async def handler(event):
                     f"<b>XABAR:</b> {message_text} \n"
                 )
                 message_id = event.message.id
-                if sender.username:
-                    formatted_message = formatted_message+f"\n@{sender.username}"
                 
                 for dest_id in destination_ids:
                     try:
                         print(f"Sending to {dest_id}")
-                        await send_to_group(dest_id, sender_id, formatted_message, sender.username, chat_id, message_id)
+                        await send_to_group(
+                            group_id=dest_id, 
+                            formatted_message=formatted_message, 
+                            sender_id=sender_id, 
+                            sender_username=sender.username, 
+                            sender_phone=sender.phone,
+                            source_chat_id=chat_id, 
+                            message_id=message_id)
                     except Exception as e:
                         error_msg = f"{datetime.now()} Error with sending:{str(e)}"
                         print(error_msg)

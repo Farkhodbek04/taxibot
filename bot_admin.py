@@ -30,11 +30,31 @@ bot = Bot(token=BOT_TOKEN)
 storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 
-async def send_to_group(group_id, sender_id, formatted_message, sender_username=None, source_chat_id=None, message_id=None):
+async def send_to_group(
+    group_id, 
+    formatted_message, 
+    sender_id, 
+    sender_username=None, 
+    sender_phone=None, 
+    source_chat_id=None, 
+    message_id=None
+):
+    
     print(f"Attempting to send to group {group_id} with sender_id {sender_id}")
+    
+    # Link to original message
     chat_id_str = str(source_chat_id).replace("-100", "")
     message_link = f"https://t.me/c/{chat_id_str}/{message_id}"
-    formatted_message += f"\n👤 <a href='{message_link}'>KILENT</a>"
+    formatted_message += f"\n\n📨 <a href='{message_link}'>Xabar manzili</a>\n"
+    
+    # Link to user's profile if username is available
+    if sender_username:
+        user_link = f"https://t.me/{sender_username}"
+        formatted_message += f"\n👤 <a href='{user_link}'>KLIENT</a>\n"
+        
+     # Add phone number if available
+    if sender_phone:
+        formatted_message += f"\n📞 Aloqa: +{sender_phone}"
 
     try:
         await bot.send_message(
