@@ -131,9 +131,15 @@ async def is_client_request(message):
     negatives = {'olamiz', 'olyappiz', 'yuramiz', 'yuryappiz', 'yuriladi', 'kam', 'benzin', 'propan', 'prapan', "bo'sh",
     'оламиз', 'олйаппиз', 'йурамиз', 'йурйаппиз', 'йурилади', 'кам', 'бензин', 'пропан', 'прапан', 'бош', "юрамиз", 
     "юрйаппиз", "юрилади", "оляппиз", "оляпиз", "йуряппиз", "йуряпиз", "olyapiz", "yuryapiz", "pustoy", "пустой", "олиб", 
-    "olib", "юрдик", "почталар", "yudik", "pochtalar", "reklama", "руки", "выкопать", "кобалт", "дня", "присмотреть", }
+    "olib", "юрдик", "почталар", "yudik", "pochtalar", "reklama", "руки", "выкопать", "кобалт", "дня", "присмотреть", "рахмат", "топтим", "топдим", "raxmat", "rahmat"}
+    
     if sum(1 if val.lower() in negatives  else 0 for val in message.split()) >= 1:
         return False
+    
+    negatives2 = {"олиб кетамиз", "почталар олиб кетамиз"}
+    for i in negatives:
+        if i in message:
+            return False
     
     words = message.split()
     
@@ -171,10 +177,11 @@ async def handler(event):
         chat_id = event.chat_id
         sender_id = 0
         if chat_id in source_ids:
-            if await is_client_request(message_text):
+            if len(message_text) <= 100 and await is_client_request(message_text):
                 print(message_text)
                 sender = await event.get_sender()
                 sender_id = sender.id
+                
                 formatted_message = (
                     "🚖 Yangi kilent\n\n"                    
                     f"<b>XABAR:</b> {message_text} \n"
