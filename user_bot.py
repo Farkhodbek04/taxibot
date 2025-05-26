@@ -130,7 +130,8 @@ except Exception as e:
 async def is_client_request(message):
     negatives = {'olamiz', 'olyappiz', 'yuramiz', 'yuryappiz', 'yuriladi', 'kam', 'benzin', 'propan', 'prapan', "bo'sh",
     'оламиз', 'олйаппиз', 'йурамиз', 'йурйаппиз', 'йурилади', 'кам', 'бензин', 'пропан', 'прапан', 'бош', "юрамиз", 
-    "юрйаппиз", "юрилади", "оляппиз", "оляпиз", "йуряппиз", "йуряпиз", "olyapiz", "yuryapiz", "pustoy", "пустой", "олиб", "olib", "юрдик", "почталар", "yudik", "pochtalar", "reklama", "руки", "Выкопать", "Кобалт", "дня", "Присмотреть", }
+    "юрйаппиз", "юрилади", "оляппиз", "оляпиз", "йуряппиз", "йуряпиз", "olyapiz", "yuryapiz", "pustoy", "пустой", "олиб", 
+    "olib", "юрдик", "почталар", "yudik", "pochtalar", "reklama", "руки", "выкопать", "кобалт", "дня", "присмотреть", }
     if sum(1 if val.lower() in negatives  else 0 for val in message.split()) >= 1:
         return False
     
