@@ -13,5 +13,6 @@ venv/
 .DS_Store
 user_session.session
 admin_session.session
+*.session
 groups_config.json
 groups_config
