@@ -33,24 +33,22 @@ dp = Dispatcher(storage=storage)
 async def send_to_group(
     group_id, 
     formatted_message, 
-    sender_id, 
-    sender_username=None, 
-    sender_phone=None, 
-    source_chat_id=None, 
-    message_id=None
-):
+    sender_id,
+    sender_phone=None,
+    message_link=None,
+    user_link=None
+    ):
     
     print(f"Attempting to send to group {group_id} with sender_id {sender_id}")
     
     # Link to original message
-    chat_id_str = str(source_chat_id).replace("-100", "")
-    message_link = f"https://t.me/c/{chat_id_str}/{message_id}"
     formatted_message += f"\n\n📨 <a href='{message_link}'>Xabar manzili</a>\n"
     
     # Link to user's profile if username is available
-    if sender_username:
-        user_link = f"https://t.me/{sender_username}"
+    if user_link is not None:
         formatted_message += f"\n👤 <a href='{user_link}'>KLIENT</a>\n"
+    else:
+        formatted_message += f"\n👤 KLIENT\n"
         
      # Add phone number if available
     if sender_phone:

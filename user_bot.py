@@ -132,13 +132,13 @@ async def is_client_request(message):
     'оламиз', 'оламиз.', 'олйаппиз', 'олйаппиз.', 'йурамиз', 'йурамиз.', 'йурйаппиз', 'йурйаппиз.', 'йурилади', 'йурилади.', 'кам', 'кам.', 'бензин', 'бензин.', 'пропан', 
     'пропан.', 'прапан', 'прапан.', "юрамиз", "юрйаппиз", "юрилади", "оляппиз", "оляпиз", "йуряппиз", "йуряпиз", "olyapiz", "yuryapiz", "pustoy", "пустой", "олиб", 
     "olib", "юрдик", "почталар", "yudik", "pochtalar", "reklama", "руки", "выкопать", "кобалт", "дня", "присмотреть", "рахмат", 
-    "топтим", "топдим", "raxmat", "rahmat", "topildi", "топилди", "топилди.", "olamiz.", "bot", "бот"}
+    "топтим", "топдим", "raxmat", "rahmat", "topildi", "топилди", "топилди.", "olamiz.", "bot", "бот", "Кобалтдаман", "кобалтдаман", "kobaltdaman"}
         
     if sum(1 if val.lower() in negatives  else 0 for val in message.split()) >= 1:
         return False
     
-    negatives2 = {"олиб кетамиз", "почталар олиб кетамиз"}
-    for i in negatives:
+    negatives2 = {"олиб кетамиз", "почталар олиб кетамиз", "Кобалтдаман"}
+    for i in negatives2:
         if i in message:
             return False
     
@@ -181,7 +181,66 @@ url_pattern = r'(https?://[^\s]+)'
 @client.on(events.NewMessage)
 async def handler(event):
     from bot_admin import send_to_group
-    links = []
+    try:
+        chat_id = event.chat_id
+        message_text = event.message.message
+        if chat_id == -1002092343101 and  message_text.startswith("📧 Xabar:"):
+            avoids = {"🔗", "Xabar", "Yuborgan", "👤", "foydalanuvchi"}
+            def process_msg(message_text):
+                res = ""
+                for w in message_text.split():
+                    if w not in avoids:
+                        if w == "📧":
+                            w = f"\n\n{w}"
+                        elif w == "☎️":
+                            w = f"\n\n{w}"
+                        res += f" {w}"
+                return res
+                
+            message_text = process_msg(message_text)
+            chat_id = event.chat_id
+            message_id = event.message.id
+            links = []
+            if event.message.entities:
+                for entity in event.message.entities:
+                    if isinstance(entity, MessageEntityTextUrl):
+                        links.append(entity.url)
+                print(f"URLs: {links}")
+                
+            message_link = links[0]
+            user_link = None
+            if len(links) > 1:
+                user_link = links[1]
+            else:
+                user_link = None
+            sender_id = await event.get_sender()
+            for dest_id in destination_ids:
+                try:
+                    print(f"Sending to {dest_id}")
+                    await send_to_group(
+                        group_id=dest_id, 
+                        formatted_message=message_text, 
+                        sender_id=sender_id.id, 
+                        message_link=message_link,
+                        user_link=user_link
+                        )
+                except Exception as e:
+                    error_msg = f"{datetime.now()} Error with sending from Mercedes:{str(e)}"
+                    print(error_msg)
+                    with open("error.log", "a") as f:
+                        f.write(f"{error_msg}\n")
+                    if bot and SUPERADMIN and "NoneType" not in str(e):
+                        asyncio.create_task(bot.send_message(SUPERADMIN, f"🚨 UserBot: {error_msg} ⚠️"))
+                    print(f"Eroor: {e}")
+                    raise  
+    except Exception as e:
+        error_msg = f"Error in message handler in getting Mercedes group: {str(e)}"
+        print(error_msg)
+        with open('error.log', 'a') as log_file:
+            log_file.write(f"{error_msg}\n")
+        if bot and SUPERADMIN and "NoneType" not in str(e):
+            await bot.send_message(SUPERADMIN, f"🚨 UserBot: {error_msg} ⚠️")
+        
     try:
         message_text = event.message.message
         chat_id = event.chat_id
@@ -191,11 +250,7 @@ async def handler(event):
         
         if chat_id in source_ids:
             if message_text and len(message_text) <= 100 and await is_client_request(message_text):
-                if event.message.entities:
-                    for entity in event.message.entities:
-                        if isinstance(entity, MessageEntityTextUrl):
-                            links.append(entity.url)
-                    print(f"URLs: {links}")
+                
                 print(message_text)
                 sender = await event.get_sender()
                 sender_id = sender.id
@@ -205,7 +260,12 @@ async def handler(event):
                     f"<b>XABAR:</b> {message_text} \n"
                 )
                 message_id = event.message.id
-                
+                chat_id_str = str(chat_id).replace("-100", "")
+                message_link = f"https://t.me/c/{chat_id_str}/{message_id}"
+                if sender.username:
+                    user_link = f"https://t.me/{sender.username}"
+                else:
+                    user_link = None
                 for dest_id in destination_ids:
                     try:
                         print(f"Sending to {dest_id}")
@@ -213,10 +273,9 @@ async def handler(event):
                             group_id=dest_id, 
                             formatted_message=formatted_message, 
                             sender_id=sender_id, 
-                            sender_username=sender.username, 
-                            sender_phone=sender.phone,
-                            source_chat_id=chat_id, 
-                            message_id=message_id)
+                            message_link=message_link,
+                            user_link=user_link, 
+                            sender_phone=sender.phone)
                     except Exception as e:
                         error_msg = f"{datetime.now()} Error with sending:{str(e)}"
                         print(error_msg)
