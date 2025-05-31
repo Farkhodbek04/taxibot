@@ -33,7 +33,7 @@ dp = Dispatcher(storage=storage)
 async def send_to_group(
     group_id, 
     formatted_message, 
-    sender_id,
+    sender_id=None,
     sender_phone=None,
     message_link=None,
     user_link=None

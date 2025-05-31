@@ -2,9 +2,10 @@ import json
 import os
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
-from telethon.tl.types import Channel, Chat, User
+from telethon.tl.types import Channel, Chat, User, PeerUser, MessageEntityUrl, MessageEntityTextUrl
 from telethon import TelegramClient, Button
 from telethon.errors import SessionPasswordNeededError, ApiIdInvalidError, AuthKeyUnregisteredError
+from telethon.tl.functions.users import GetFullUserRequest
 from rapidfuzz import process, fuzz
 from dotenv import load_dotenv
 from datetime import datetime
@@ -185,6 +186,7 @@ async def handler(event):
         chat_id = event.chat_id
         message_text = event.message.message
         if chat_id == -1002092343101 and  message_text.startswith("📧 Xabar:"):
+            print(message_text)
             avoids = {"🔗", "Xabar", "Yuborgan", "👤", "foydalanuvchi"}
             def process_msg(message_text):
                 res = ""
@@ -193,6 +195,8 @@ async def handler(event):
                         if w == "📧":
                             w = f"\n\n{w}"
                         elif w == "☎️":
+                            w = f"\n\n{w}"
+                        elif w == "📞":
                             w = f"\n\n{w}"
                         res += f" {w}"
                 return res
@@ -205,6 +209,10 @@ async def handler(event):
                 for entity in event.message.entities:
                     if isinstance(entity, MessageEntityTextUrl):
                         links.append(entity.url)
+                    elif isinstance(entity, MessageEntityUrl):
+                        # Extract from text using offset and length
+                        url = message_text[entity.offset : entity.offset + entity.length]
+                        links.append(url)
                 print(f"URLs: {links}")
                 
             message_link = links[0]
@@ -213,14 +221,12 @@ async def handler(event):
                 user_link = links[1]
             else:
                 user_link = None
-            sender_id = await event.get_sender()
             for dest_id in destination_ids:
                 try:
                     print(f"Sending to {dest_id}")
                     await send_to_group(
                         group_id=dest_id, 
-                        formatted_message=message_text, 
-                        sender_id=sender_id.id, 
+                        formatted_message=message_text,
                         message_link=message_link,
                         user_link=user_link
                         )
@@ -263,7 +269,10 @@ async def handler(event):
                 chat_id_str = str(chat_id).replace("-100", "")
                 message_link = f"https://t.me/c/{chat_id_str}/{message_id}"
                 if sender.username:
-                    user_link = f"https://t.me/{sender.username}"
+                    async with TelegramClient(SESSION_NAME, API_ID, API_HASH) as client:
+                        user = client(GetFullUserRequest(PeerUser(sender_id)))
+                        print(user.user.username)
+                        user_link = f"https://t.me/{user.user.username}"
                 else:
                     user_link = None
                 for dest_id in destination_ids:
