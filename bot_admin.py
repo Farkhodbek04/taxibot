@@ -12,6 +12,9 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.exceptions import TelegramBadRequest
 from dotenv import load_dotenv
 
+from user_bot import get_groups_dict
+MAX_MESSAGE_LENGTH = 4096  # Telegram's max message length
+
 
 # Load environment variables
 load_dotenv()
@@ -19,7 +22,6 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_IDS = [int(x.strip()) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip()]
 API_ID = os.getenv("API_ID")
 API_HASH = os.getenv("API_HASH")
-SESSION_NAME = "admin_session"
 SUPERADMIN = int(os.getenv("SUPERADMIN", "0"))
 CONFIG_FILE = "groups_config.json"
 
@@ -27,6 +29,43 @@ CONFIG_FILE = "groups_config.json"
 bot = Bot(token=BOT_TOKEN)
 storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
+
+async def send_to_group(
+    group_id, 
+    formatted_message, 
+    sender_id, 
+    sender_username=None, 
+    sender_phone=None, 
+    source_chat_id=None, 
+    message_id=None
+):
+    
+    print(f"Attempting to send to group {group_id} with sender_id {sender_id}")
+    
+    # Link to original message
+    chat_id_str = str(source_chat_id).replace("-100", "")
+    message_link = f"https://t.me/c/{chat_id_str}/{message_id}"
+    formatted_message += f"\n\n📨 <a href='{message_link}'>Xabar manzili</a>\n"
+    
+    # Link to user's profile if username is available
+    if sender_username:
+        user_link = f"https://t.me/{sender_username}"
+        formatted_message += f"\n👤 <a href='{user_link}'>KLIENT</a>\n"
+        
+     # Add phone number if available
+    if sender_phone:
+        formatted_message += f"\n📞 Aloqa: +{sender_phone}"
+
+    try:
+        await bot.send_message(
+            chat_id=group_id,
+            text=formatted_message,
+            parse_mode="HTML",
+            disable_web_page_preview=True,
+        )
+        print(f"Message sent to group {group_id}")
+    except Exception as e:
+        print(f"Failed to send message to group {group_id}: {e}")
 
 def escape_md(text: str) -> str:
     """
@@ -99,30 +138,37 @@ def save_config(config):
             file.write("reload")
 
         print("✅ Config saved successfully.")
+        return True
     except Exception as e:
         print(f"❌ Error saving config: {str(e)}")
-        raise
+        if SUPERADMIN:
+            asyncio.create_task(bot.send_message(SUPERADMIN, f"🚨 Config saqlashda xatolik: {str(e)} ⚠️"))
+        return False  # Indicate failure
 
 def split_message(text: str, max_length: int = 4096) -> list:
     """Split a message into parts that fit within Telegram's max message length."""
-    if len(text) <= max_length:
-        return [text]
-    
-    messages = []
-    current_message = ""
-    lines = text.split("\n")
-    
-    for line in lines:
-        if len(current_message) + len(line) + 1 > max_length:
+    try:
+        if len(text) <= max_length:
+            return [text]
+        
+        messages = []
+        current_message = ""
+        lines = text.split("\n")
+        
+        for line in lines:
+            if len(current_message) + len(line) + 1 > max_length:
+                messages.append(current_message.strip())
+                current_message = line + "\n"
+            else:
+                current_message += line + "\n"
+        
+        if current_message.strip():
             messages.append(current_message.strip())
-            current_message = line + "\n"
-        else:
-            current_message += line + "\n"
-    
-    if current_message.strip():
-        messages.append(current_message.strip())
-    
-    return messages
+        
+        return messages
+    except Exception as e:
+        print(f"error at split message: {e}")
+        
 # Initial config load
 config = load_config("config.json")
 ADMIN_IDS = config.get("admins", ADMIN_IDS) 
@@ -283,20 +329,23 @@ async def process_add_category(callback_query: CallbackQuery, state: FSMContext)
 
     if category_key in ["manbalar", "manzillar"]:
         # Fetch all groups from cache (no filtering)
-        available_groups = get_available_groups()
-        if available_groups:
-            groups_text = '\n'.join(f"`{group_id}` - {escape_md(group_name)}" for group_id, group_name in available_groups.items())
-        else:
-            groups_text = (
-                "📂 Guruhlar ro'yxati mavjud emas.\n\n"
-                "Iltimos, guruhlar ro'yxatini yangilash uchun **bosh menyudan** "
-                "**Guruhlarim 📂** tugmasini bosing."
-            )
+        try:
+            available_groups = get_available_groups() or {}
+            if available_groups:
+                groups_text = '\n'.join(f"`{group_id}` - {escape_md(group_name)}" for group_id, group_name in available_groups.items())
+            else:
+                groups_text = (
+                    "📂 Guruhlar ro'yxati mavjud emas.\n\n"
+                    "Iltimos, guruhlar ro'yxatini yangilash uchun **bosh menyudan** "
+                    "**Guruhlarim 📂** tugmasini bosing."
+                )
 
-        prompt = (
-            f"Iltimos, **{category_key.capitalize()} 📋** qo'shish uchun guruh ID sini kiriting "
-            f"(masalan, -1001234567890). 😊\n\nMavjud guruhlar ro'yxati:\n\n{groups_text}"
-        )
+            prompt = (
+                f"Iltimos, **{category_key.capitalize()} 📋** qo'shish uchun guruh ID sini kiriting "
+                f"(masalan, -1001234567890). 😊\n\nMavjud guruhlar ro'yxati:\n\n{groups_text}"
+            )
+        except Exception as e:
+            print(e)
 
         try:
             messages = split_message(prompt)
@@ -359,11 +408,6 @@ async def add_source(message: Message, state: FSMContext):
     value = message.text.strip()
     try:
         value = int(value)
-        # Normalize the value to -100xxxxxxxxxx format
-        if value >= 0:
-            value = int(f"-100{value}")
-        elif not str(value).startswith("-100"):
-            value = int(f"-100{abs(value)}")
         value = str(value)  # Store as string key
 
         if value in config.get("sources", {}):
@@ -396,11 +440,6 @@ async def add_destination(message: Message, state: FSMContext):
     value = message.text.strip()
     try:
         value = int(value)
-        # Normalize to -100xxxxxxxxxx format
-        if value >= 0:
-            value = int(f"-100{value}")
-        elif not str(value).startswith("-100"):
-            value = int(f"-100{abs(value)}")
         value = str(value)  # Store as string key
 
         if value in config.get("destinations", {}):
@@ -433,7 +472,7 @@ async def add_keyword(message: Message, state: FSMContext):
         await state.clear()
         return
     try:
-        value = value.encode().decode("utf-8")  # Normalize encoding
+        value = value.encode('utf-8').decode('utf-8', errors='ignore')
         if value not in config["keywords"]:
             config["keywords"].append(value)
             if save_config(config) or 1:
@@ -575,10 +614,6 @@ async def process_back(callback_query: CallbackQuery, state: FSMContext):
     await callback_query.answer()
     await bot.send_message(callback_query.from_user.id, "Asosiy menyuga qaytdingiz! 🎉", reply_markup=main_menu)
 
-from user_bot import get_groups_dict
-MAX_MESSAGE_LENGTH = 4096  # Telegram's max message length
-
-
 # Handler for Guruhlarim
 @dp.callback_query(lambda c: c.data == "groups")
 async def show_my_groups(callback_query: CallbackQuery, state: FSMContext):
@@ -631,10 +666,11 @@ async def main():
         await dp.start_polling(bot, skip_updates=True)
     except Exception as e:
         # Log error to file
+        print(f"ERROR: {e}")
         with open('error.log', 'a', encoding='utf-8') as log_file:
             log_file.write(f"Error: {str(e)}\n")
         # Notify superadmin
-        if SUPERADMIN:
+        if SUPERADMIN and "argument of type 'NoneType'" not in str(e):
             try:
                 await bot.send_message(SUPERADMIN, f"🚨 Botda xatolik yuz berdi: {str(e)} ⚠️")
             except Exception as notify_error:

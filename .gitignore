@@ -1,5 +1,6 @@
 .env
 config.json
+*.json
 userbot_session.session
 reload_config.txt
 error.log
