@@ -3,8 +3,6 @@ import os
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 from telethon.tl.types import Channel, Chat, User, PeerUser, MessageEntityUrl, MessageEntityTextUrl
-from telethon import TelegramClient, Button
-from telethon.errors import SessionPasswordNeededError, ApiIdInvalidError, AuthKeyUnregisteredError
 from telethon.tl.functions.users import GetFullUserRequest
 from rapidfuzz import process, fuzz
 from dotenv import load_dotenv
@@ -29,6 +27,9 @@ if BOT_TOKEN and SUPERADMIN:
     from aiogram import Bot
     bot = Bot(token=BOT_TOKEN)
 
+# Define a global lock for session access
+session_lock = asyncio.Lock()
+
 # Global variables to store configuration
 config = {}
 source_ids = {}
@@ -49,46 +50,43 @@ def read_config():
             return json.load(f)
     except Exception as e:
         error_msg = f"{datetime.now()} Error reading config.json in user_bot: {str(e)}"
-        print( error_msg)
+        print(error_msg)
         with open('error.log', 'a', encoding='utf-8') as log_file:
             log_file.write(f"{error_msg}\n")
         if bot and SUPERADMIN:
             asyncio.create_task(bot.send_message(SUPERADMIN, f"🚨 UserBot: {error_msg} ⚠️"))
         raise
-    
-from telethon.tl.types import Channel, Chat
 
 async def fetch_my_groups_with_id(client):
-    my_groups = {}
-    try:
-        async for dialog in client.iter_dialogs():
-            entity = dialog.entity
-            # Include megagroups and normal groups
-            if isinstance(entity, Channel) and entity.megagroup:
-                group_id = entity.id
-                name = entity.title
-                id_str = f"-100{str(group_id)}"
-                if entity.username:
-                    link = f"https://t.me/{entity.username}"
-                    my_groups[id_str] = f"[{name}]({link})"
-                else:
-                    my_groups[id_str] = f"[{name}](Havola yo'q)"
-            elif isinstance(entity, Chat):  # classic group
-                group_id = entity.id
-                name = entity.title
-                id_str = f"-{str(group_id)}"
-                my_groups[id_str] = f"[{name}](Classic guruh - havola yo'q)"
-    except Exception as e:
-        error_msg = f"{datetime.now()} Error with getting groups list:{str(e)}"
-        print(error_msg)
-        with open("error.log", "a") as f:
-            f.write(f"{error_msg}\n")
-        if bot and SUPERADMIN:
-            asyncio.create_task(bot.send_message(SUPERADMIN, f"🚨 UserBot: {error_msg} ⚠️"))
-        raise
-
-    return my_groups
-
+    async with session_lock:
+        my_groups = {}
+        try:
+            async for dialog in client.iter_dialogs():
+                entity = dialog.entity
+                # Include megagroups and normal groups
+                if isinstance(entity, Channel) and entity.megagroup:
+                    group_id = entity.id
+                    name = entity.title
+                    id_str = f"-100{str(group_id)}"
+                    if entity.username:
+                        link = f"https://t.me/{entity.username}"
+                        my_groups[id_str] = f"[{name}]({link})"
+                    else:
+                        my_groups[id_str] = f"[{name}](Havola yo'q)"
+                elif isinstance(entity, Chat):  # classic group
+                    group_id = entity.id
+                    name = entity.title
+                    id_str = f"-{str(group_id)}"
+                    my_groups[id_str] = f"[{name}](Classic guruh - havola yo'q)"
+        except Exception as e:
+            error_msg = f"{datetime.now()} Error with getting groups list:{str(e)}"
+            print(error_msg)
+            with open("error.log", "a") as f:
+                f.write(f"{error_msg}\n")
+            if bot and SUPERADMIN:
+                asyncio.create_task(bot.send_message(SUPERADMIN, f"🚨 UserBot: {error_msg} ⚠️"))
+            raise
+        return my_groups
 
 async def get_groups_dict():
     try:
@@ -135,7 +133,7 @@ async def is_client_request(message):
     "olib", "юрдик", "почталар", "yudik", "pochtalar", "reklama", "руки", "выкопать", "кобалт", "дня", "присмотреть", "рахмат", 
     "топтим", "топдим", "raxmat", "rahmat", "topildi", "топилди", "топилди.", "olamiz.", "bot", "бот", "Кобалтдаман", "кобалтдаман", "kobaltdaman"}
         
-    if sum(1 if val.lower() in negatives  else 0 for val in message.split()) >= 1:
+    if sum(1 if val.lower() in negatives else 0 for val in message.split()) >= 1:
         return False
     
     negatives2 = {"олиб кетамиз", "почталар олиб кетамиз", "Кобалтдаман"}
@@ -163,7 +161,7 @@ async def is_client_request(message):
         if total_words == 1:
             return matched_words == 1
         if total_words <= 8:
-            return  match_percentage >= 50
+            return match_percentage >= 50
         elif total_words > 9:
             return match_percentage >= 60
     except Exception as e:
@@ -174,7 +172,7 @@ async def is_client_request(message):
         if bot and SUPERADMIN:
             await bot.send_message(SUPERADMIN, f"🚨 UserBot: {error_msg} ⚠️")
         return False
-    
+
 import re
 from telethon.tl.types import MessageEntityTextUrl
 url_pattern = r'(https?://[^\s]+)'
@@ -185,7 +183,7 @@ async def handler(event):
     try:
         chat_id = event.chat_id
         message_text = event.message.message
-        if chat_id == -1002092343101 and  message_text.startswith("📧 Xabar:"):
+        if chat_id == -1002092343101 and message_text.startswith("📧 Xabar:"):
             print(message_text)
             avoids = {"🔗", "Xabar", "Yuborgan", "👤", "foydalanuvchi"}
             def process_msg(message_text):
@@ -237,7 +235,7 @@ async def handler(event):
                         f.write(f"{error_msg}\n")
                     if bot and SUPERADMIN and "NoneType" not in str(e):
                         asyncio.create_task(bot.send_message(SUPERADMIN, f"🚨 UserBot: {error_msg} ⚠️"))
-                    print(f"Eroor: {e}")
+                    print(f"Error: {e}")
                     raise  
     except Exception as e:
         error_msg = f"Error in message handler in getting Mercedes group: {str(e)}"
@@ -246,54 +244,51 @@ async def handler(event):
             log_file.write(f"{error_msg}\n")
         if bot and SUPERADMIN and "NoneType" not in str(e):
             await bot.send_message(SUPERADMIN, f"🚨 UserBot: {error_msg} ⚠️")
-        
+
     try:
         message_text = event.message.message
         chat_id = event.chat_id
         sender_id = 0
     
-        
-        
         if chat_id in source_ids:
             if message_text and len(message_text) <= 100 and await is_client_request(message_text):
-                
                 print(message_text)
-                sender = await event.get_sender()
-                sender_id = sender.id
-                
-                formatted_message = (
-                    "🚖 Yangi kilent\n\n"                    
-                    f"<b>XABAR:</b> {message_text} \n"
-                )
-                message_id = event.message.id
-                chat_id_str = str(chat_id).replace("-100", "")
-                message_link = f"https://t.me/c/{chat_id_str}/{message_id}"
-                if sender.username:
-                    async with TelegramClient(SESSION_NAME, API_ID, API_HASH) as client:
-                        user = client(GetFullUserRequest(PeerUser(sender_id)))
-                        print(user.user.username)
-                        user_link = f"https://t.me/{user.user.username}"
-                else:
+                async with session_lock:
+                    sender = await event.get_sender()
+                    sender_id = sender.id
+                    
+                    formatted_message = (
+                        "🚖 Yangi kilent\n\n"                    
+                        f"<b>XABAR:</b> {message_text} \n"
+                    )
+                    message_id = event.message.id
+                    chat_id_str = str(chat_id).replace("-100", "")
+                    message_link = f"https://t.me/c/{chat_id_str}/{message_id}"
                     user_link = None
-                for dest_id in destination_ids:
-                    try:
-                        print(f"Sending to {dest_id}")
-                        await send_to_group(
-                            group_id=dest_id, 
-                            formatted_message=formatted_message, 
-                            sender_id=sender_id, 
-                            message_link=message_link,
-                            user_link=user_link, 
-                            sender_phone=sender.phone)
-                    except Exception as e:
-                        error_msg = f"{datetime.now()} Error with sending:{str(e)}"
-                        print(error_msg)
-                        with open("error.log", "a") as f:
-                            f.write(f"{error_msg}\n")
-                        if bot and SUPERADMIN and "NoneType" not in str(e):
-                            asyncio.create_task(bot.send_message(SUPERADMIN, f"🚨 UserBot: {error_msg} ⚠️"))
-                        print(f"Eroor: {e}")
-                        raise         
+                    if sender.username:
+                        user = await client(GetFullUserRequest(PeerUser(sender_id)))
+                        print(sender.username)  # Updated to access username directly
+                        user_link = f"https://t.me/{sender.username}"  # Updated to access username directly
+                    
+                    for dest_id in destination_ids:
+                        try:
+                            print(f"Sending to {dest_id}")
+                            await send_to_group(
+                                group_id=dest_id, 
+                                formatted_message=formatted_message, 
+                                sender_id=sender_id, 
+                                message_link=message_link,
+                                user_link=user_link, 
+                                sender_phone=sender.phone)
+                        except Exception as e:
+                            error_msg = f"{datetime.now()} Error with sending:{str(e)}"
+                            print(error_msg)
+                            with open("error.log", "a") as f:
+                                f.write(f"{error_msg}\n")
+                            if bot and SUPERADMIN and "NoneType" not in str(e):
+                                await bot.send_message(SUPERADMIN, f"🚨 UserBot: {error_msg} ⚠️")
+                            print(f"Error: {e}")
+                            raise         
     except Exception as e:
         error_msg = f"Error in message handler: {str(e)}"
         print(error_msg)
@@ -319,7 +314,7 @@ async def config_poller():
         if bot and SUPERADMIN:
             await bot.send_message(SUPERADMIN, f"🚨 UserBot: {error_msg} ⚠️")
         raise
-    
+
 async def user_bot_main():
     try:
         await client.start()
