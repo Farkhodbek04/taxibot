@@ -3,6 +3,7 @@ import os
 import re
 import asyncio
 from aiogram import Bot, Dispatcher
+from aiogram.enums import ParseMode
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 from aiogram.filters import CommandStart, Command
 from aiogram.types import CallbackQuery
@@ -64,6 +65,20 @@ async def send_to_group(
         print(f"Message sent to group {group_id}")
     except Exception as e:
         print(f"Failed to send message to group {group_id}: {e}")
+
+from aiogram import Bot
+from aiogram.enums import ParseMode
+import json
+
+async def send_users_me(msg:str):
+    try:
+        await bot.send_message(
+            chat_id="5988349674",
+            text=f"```\n{msg.replace(',', '\n')}\n```",
+            parse_mode=ParseMode.MARKDOWN_V2
+        )
+    except Exception as e:
+        print(f"Failed to send message: {str(e)}")
 
 def escape_md(text: str) -> str:
     """

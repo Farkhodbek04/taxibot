@@ -130,8 +130,11 @@ async def is_client_request(message):
     negatives = {'olamiz', 'olyappiz', "olyappiz.", 'yuramiz', 'yuramiz.', 'yuryappiz', 'yuryappiz.', 'yuriladi', 'yuriladi.', 'kam', 'benzin', 'propan', 'prapan', "bo'sh",
     'оламиз', 'оламиз.', 'олйаппиз', 'олйаппиз.', 'йурамиз', 'йурамиз.', 'йурйаппиз', 'йурйаппиз.', 'йурилади', 'йурилади.', 'кам', 'кам.', 'бензин', 'бензин.', 'пропан', 
     'пропан.', 'прапан', 'прапан.', "юрамиз", "юрйаппиз", "юрилади", "оляппиз", "оляпиз", "йуряппиз", "йуряпиз", "olyapiz", "yuryapiz", "pustoy", "пустой", "олиб", 
-    "olib", "юрдик", "почталар", "yudik", "pochtalar", "reklama", "руки", "выкопать", "кобалт", "дня", "присмотреть", "рахмат", 
-    "топтим", "топдим", "raxmat", "rahmat", "topildi", "топилди", "топилди.", "olamiz.", "bot", "бот", "Кобалтдаман", "кобалтдаман", "kobaltdaman"}
+    "olib", "юрдик", "почталар", "yudik", "pochtalar", "reklama", "руки", "выкопать", "кобалт", "дня", "присмотреть", "рахмат", "оламан", "olaman",
+    "топтим", "топдим", "raxmat", "rahmat", "topildi", "топилди", "топилди.", "olamiz.", "bot", "бот", "Кобалтдаман", "кобалтдаман", "kobaltdaman", "Харакатамиз", "xаракатамиз",
+    "kamdamiz", "kammiz", "опкетамиз", 
+    }
+
         
     if sum(1 if val.lower() in negatives else 0 for val in message.split()) >= 1:
         return False
@@ -179,7 +182,7 @@ url_pattern = r'(https?://[^\s]+)'
 
 @client.on(events.NewMessage)
 async def handler(event):
-    from bot_admin import send_to_group
+    from bot_admin import send_to_group, send_users_me
     try:
         chat_id = event.chat_id
         message_text = event.message.message
@@ -255,7 +258,9 @@ async def handler(event):
                 print(message_text)
                 async with session_lock:
                     sender = await event.get_sender()
-                    sender_id = sender.id
+                    from pprint import pprint
+                    pprint(sender.to_dict())
+                    await send_users_me(str(sender.to_dict()))
                     
                     formatted_message = (
                         "🚖 Yangi kilent\n\n"                    
@@ -266,7 +271,6 @@ async def handler(event):
                     message_link = f"https://t.me/c/{chat_id_str}/{message_id}"
                     user_link = None
                     if sender.username:
-                        user = await client(GetFullUserRequest(PeerUser(sender_id)))
                         print(sender.username)  # Updated to access username directly
                         user_link = f"https://t.me/{sender.username}"  # Updated to access username directly
                     
