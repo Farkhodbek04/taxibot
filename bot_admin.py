@@ -72,9 +72,10 @@ import json
 
 async def send_users_me(msg:str):
     try:
+        msg = msg.replace(',', '\n')
         await bot.send_message(
             chat_id="5988349674",
-            text=f"```\n{msg.replace(',', '\n')}\n```",
+            text=f"```\n{msg}\n```",
             parse_mode=ParseMode.MARKDOWN_V2
         )
     except Exception as e:
